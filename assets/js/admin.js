@@ -71,6 +71,18 @@ function aoChegarPedido(p) {
   if (abaAtual === 'pedidos') renderAba();
 }
 
+function mostrarAvisoEquipe(msg) {
+  const alvo = $('#painel-conteudo');
+  if (!alvo) return;
+  const caixa = document.createElement('div');
+  caixa.className = 'aviso aviso--erro';
+  caixa.style.marginBottom = '16px';
+  caixa.textContent = msg;
+  alvo.prepend(caixa);
+  caixa.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  setTimeout(() => caixa.remove(), 12000);
+}
+
 /* ---------------- confirmação de ação crítica ---------------- */
 function confirmar(titulo, detalhe) {
   return new Promise((resolve) => {
@@ -124,7 +136,7 @@ function tocarAlerta() {
 
 /* ---------------- papéis ---------------- */
 const ABAS_POR_PAPEL = {
-  admin:     ['pedidos', 'cardapio', 'complementos', 'sabores', 'config', 'registro'],
+  admin:     ['pedidos', 'cardapio', 'complementos', 'sabores', 'config', 'equipe', 'registro'],
   gerente:   ['pedidos', 'cardapio', 'complementos', 'sabores', 'config', 'registro'],
   atendente: ['pedidos']
 };
@@ -154,6 +166,7 @@ function renderAba() {
   else if (abaAtual === 'cardapio') alvo.innerHTML = htmlCardapio();
   else if (abaAtual === 'complementos') alvo.innerHTML = htmlComplementos();
   else if (abaAtual === 'sabores') alvo.innerHTML = htmlSabores();
+  else if (abaAtual === 'equipe') { alvo.innerHTML = '<div class="vazio"><p>Carregando equipe…</p></div>'; mostrarEquipe(); }
   else if (abaAtual === 'registro') { alvo.innerHTML = '<div class="vazio"><p>Carregando registro…</p></div>'; mostrarRegistro(); }
   else alvo.innerHTML = htmlConfig();
 }
@@ -381,6 +394,94 @@ function htmlSabores() {
         <input class="entrada entrada--nome" id="novo-sabor" placeholder="Novo sabor">
         <button class="btn btn--sm btn--folha" id="btn-add-sabor">Adicionar</button>
       </div>
+    </div>`;
+}
+
+/* ---------------- aba: equipe ---------------- */
+const DESCRICAO_PAPEL = {
+  admin:     'Acesso total, incluindo equipe e registro.',
+  gerente:   'Cardápio, preços, horários, pedidos e registro. Não mexe na equipe.',
+  atendente: 'Só a aba Pedidos: ver e atualizar status.'
+};
+
+async function mostrarEquipe() {
+  let equipe;
+  try {
+    equipe = await carregarEquipe();
+  } catch (e) {
+    $('#painel-conteudo').innerHTML = `<div class="aviso aviso--erro">${esc(e.message)}</div>`;
+    return;
+  }
+  $('#painel-conteudo').innerHTML = htmlEquipe(equipe);
+}
+
+function htmlEquipe(equipe) {
+  const admins = equipe.filter((p) => p.papel === 'admin' && p.ativo).length;
+
+  return `
+    <h1 class="painel__titulo">Equipe</h1>
+    <p class="painel__sub">Quem tem acesso ao painel e o que cada um pode fazer.</p>
+
+    <div class="aviso aviso--info">
+      <strong>Para dar acesso a alguém novo:</strong> crie a conta no Supabase em
+      <em>Authentication → Users → Add user</em>, marcando <em>Auto Confirm User</em>.
+      A pessoa aparece aqui como <strong>atendente</strong> e você promove.
+      <br><br>
+      O painel não cria contas porque isso exigiria guardar no site uma chave com poder total
+      sobre o banco — exatamente o que nunca pode ficar no navegador.
+    </div>
+
+    ${admins === 1 ? `<div class="aviso aviso--alerta">
+      Existe <strong>um único administrador</strong>. Se essa conta se perder, ninguém mais administra o sistema.
+      Vale promover uma segunda pessoa de confiança.
+    </div>` : ''}
+
+    <div class="caixa" style="padding:0;overflow-x:auto">
+      <table class="tabela-log tabela-equipe">
+        <thead>
+          <tr><th>E-mail</th><th>Papel</th><th>Acesso</th><th>Desde</th></tr>
+        </thead>
+        <tbody>
+          ${equipe.map((p) => `
+            <tr class="${p.ativo ? '' : 'linha-inativa'}">
+              <td>
+                ${esc(p.email || '(sem e-mail)')}
+                ${p.sou_eu ? '<span class="log-papel">você</span>' : ''}
+              </td>
+              <td>
+                <select class="entrada entrada--papel" data-papel-de="${p.id}" ${p.ativo ? '' : 'disabled'}>
+                  ${['admin','gerente','atendente'].map((op) =>
+                    `<option value="${op}" ${p.papel === op ? 'selected' : ''}>${op}</option>`).join('')}
+                </select>
+                <div class="papel-dica">${esc(DESCRICAO_PAPEL[p.papel] || '')}</div>
+              </td>
+              <td>
+                <label class="interruptor">
+                  <input type="checkbox" data-ativo-de="${p.id}" ${p.ativo ? 'checked' : ''}>
+                  ${p.ativo ? 'liberado' : 'bloqueado'}
+                </label>
+              </td>
+              <td class="log-hora">${esc(new Date(p.criado_em).toLocaleDateString('pt-BR'))}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="caixa">
+      <h2 class="caixa__titulo">O que cada papel pode</h2>
+      ${Object.entries(DESCRICAO_PAPEL).map(([k, v]) => `
+        <div class="detalhe-linha">
+          <span class="detalhe-linha__rotulo">${k}</span>
+          <span class="detalhe-linha__valor">${esc(v)}</span>
+        </div>`).join('')}
+      <p class="campo__dica" style="margin-top:14px">
+        Bloquear o acesso é melhor que apagar a conta: a pessoa perde a entrada na hora,
+        e o histórico dela no registro continua fazendo sentido.
+      </p>
+      <button class="btn btn--sm btn--linha" id="btn-sincronizar-equipe" style="margin-top:10px">
+        Sincronizar com o Supabase
+      </button>
+      <p class="campo__dica">Use se alguém foi criado no Supabase e ainda não apareceu aqui.</p>
     </div>`;
 }
 
@@ -754,6 +855,19 @@ document.addEventListener('click', async (ev) => {
     return;
   }
 
+  if (t.id === 'btn-sincronizar-equipe') {
+    t.disabled = true; t.textContent = 'Sincronizando…';
+    try {
+      const n = await sincronizarEquipe();
+      toast(n + (n === 1 ? ' conta na equipe' : ' contas na equipe'));
+      renderAba();
+    } catch (e) {
+      t.disabled = false; t.textContent = 'Sincronizar com o Supabase';
+      mostrarAvisoEquipe(e.message);
+    }
+    return;
+  }
+
   if (t.id === 'btn-salvar-config') { guardarConfig(); return; }
 });
 
@@ -806,6 +920,49 @@ document.addEventListener('change', async (ev) => {
       DB.produtos.forEach((p) => p.tamanhos.forEach((x) => { if (x.id === d.tamAtivo) x.ativo = t.checked; }));
       return;
     }
+    if (d.papelDe) {
+      const linha = t.closest('tr');
+      const email = linha ? linha.querySelector('td').textContent.trim() : 'esta conta';
+      const souEu = linha && linha.textContent.includes('você');
+      const anterior = [...t.options].find((o) => o.defaultSelected);
+
+      if (!await confirmar(
+            `Mudar ${souEu ? 'o seu próprio papel' : esc(email)} para ${t.value}?`,
+            souEu ? 'Você pode perder acesso a partes do painel imediatamente.'
+                  : DESCRICAO_PAPEL[t.value])) {
+        if (anterior) t.value = anterior.value;
+        return;
+      }
+      try {
+        await definirPapel(d.papelDe, t.value);
+        toast('Papel atualizado');
+        renderAba();
+      } catch (e) {
+        if (anterior) t.value = anterior.value;
+        mostrarAvisoEquipe(e.message);
+      }
+      return;
+    }
+
+    if (d.ativoDe) {
+      const liberar = t.checked;
+      if (!await confirmar(liberar ? 'Liberar o acesso desta conta?' : 'Bloquear o acesso desta conta?',
+            liberar ? 'A pessoa volta a conseguir entrar no painel.'
+                    : 'A pessoa perde o acesso imediatamente. O histórico dela no registro é mantido.')) {
+        t.checked = !liberar;
+        return;
+      }
+      try {
+        await definirAtivo(d.ativoDe, liberar);
+        toast(liberar ? 'Acesso liberado' : 'Acesso bloqueado');
+        renderAba();
+      } catch (e) {
+        t.checked = !liberar;
+        mostrarAvisoEquipe(e.message);
+      }
+      return;
+    }
+
     if (d.prodDesc) {
       await salvarLinha('produtos', d.prodDesc, { descricao: t.value.trim() });
       DB.produtos.find((p) => p.id === d.prodDesc).descricao = t.value.trim();

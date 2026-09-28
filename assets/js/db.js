@@ -285,6 +285,49 @@ async function excluirPedido(pedidoId) {
   DB.pedidos = DB.pedidos.filter((p) => p.id !== pedidoId);
 }
 
+/* ---------------- painel: equipe ----------------
+   Todas estas funções são security definer no banco e
+   conferem o papel lá dentro. Chamar por fora do site,
+   direto na API, esbarra na mesma checagem.
+------------------------------------------------- */
+function erroEquipe(msg) {
+  const m = String(msg || '');
+  if (m.includes('ULTIMO_ADMIN')) {
+    return 'Esta é a única conta de administrador. Promova outra pessoa a administrador antes de mudar esta — '
+         + 'senão ninguém conseguiria mais administrar o sistema.';
+  }
+  if (m.includes('SEM_PERMISSAO')) return 'Só o administrador pode gerenciar a equipe.';
+  if (m.includes('PAPEL_INVALIDO')) return 'Papel inválido.';
+  if (m.includes('USUARIO_NAO_ENCONTRADO')) return 'Conta não encontrada. Sincronize a equipe e tente de novo.';
+  return 'Não foi possível concluir. Tente novamente.';
+}
+
+async function carregarEquipe() {
+  const s = cliente();
+  const { data, error } = await s.rpc('listar_equipe');
+  if (error) throw new Error(erroEquipe(error.message));
+  return data || [];
+}
+
+async function definirPapel(id, papel) {
+  const s = cliente();
+  const { error } = await s.rpc('definir_papel', { p_id: id, p_papel: papel });
+  if (error) throw new Error(erroEquipe(error.message));
+}
+
+async function definirAtivo(id, ativo) {
+  const s = cliente();
+  const { error } = await s.rpc('definir_ativo', { p_id: id, p_ativo: ativo });
+  if (error) throw new Error(erroEquipe(error.message));
+}
+
+async function sincronizarEquipe() {
+  const s = cliente();
+  const { data, error } = await s.rpc('sincronizar_equipe');
+  if (error) throw new Error(erroEquipe(error.message));
+  return data;
+}
+
 /* ---------------- painel: registro de auditoria ---------------- */
 async function carregarAuditoria(limite) {
   const s = cliente();
