@@ -51,15 +51,12 @@ function renderLoja() {
   $('#marca-nome').textContent = c.nomeLoja;
   document.title = c.nomeLoja;
 
-  const status = $('#status-loja');
-  status.className = 'pill ' + (c.aberta ? 'pill--aberta' : 'pill--fechada');
-  status.innerHTML = '<span class="pill__dot"></span>' + (c.aberta ? 'Aberta agora' : 'Fechada');
-  $('#aviso-fechada').hidden = !!c.aberta;
+  atualizarStatusLoja();
 
   $('#hero-meta').innerHTML = [
     `<span class="chip chip--folha">🛵 Entrega ${c.taxaEntrega > 0 ? brl(c.taxaEntrega) : 'grátis'}</span>`,
     `<span class="chip chip--flor">🏪 Retirada no balcão</span>`,
-    `<span class="chip">🕐 ${esc(c.horario)}</span>`
+    `<span class="chip">🕐 ${esc(resumoSemana(c))}</span>`
   ].join('');
 
   renderProdutos();
@@ -147,6 +144,56 @@ function renderInfo() {
     `<a href="${waLink(c.whatsapp, 'Olá! Vim pelo site 😊')}" target="_blank" rel="noopener">WhatsApp</a>`
   ].filter(Boolean).join('');
   $('#rodape-endereco').textContent = c.endereco;
+}
+
+/* ---------------- estado da loja (horário) ---------------- */
+let estadoLoja = { aberta: true };
+let relogio = null;
+
+function atualizarStatusLoja() {
+  const c = DB.config;
+  if (!c) return;
+  estadoLoja = estadoDaLoja(c);
+
+  const pill = $('#status-loja');
+  pill.className = 'pill ' + (estadoLoja.aberta ? 'pill--aberta' : 'pill--fechada');
+  pill.innerHTML = '<span class="pill__dot"></span>' + esc(estadoLoja.texto);
+  pill.title = estadoLoja.detalhe || '';
+
+  const aviso = $('#aviso-fechada');
+  aviso.hidden = estadoLoja.aberta;
+  if (!estadoLoja.aberta) {
+    aviso.innerHTML = c.aceitaForaHorario
+      ? `<strong>Estamos fechados agora</strong> — ${esc(estadoLoja.detalhe)}.
+         Você pode deixar o pedido encomendado: preparamos assim que abrirmos.`
+      : `<strong>Estamos fechados agora</strong> — ${esc(estadoLoja.detalhe)}.
+         Volte no horário de atendimento para fazer seu pedido.`;
+  }
+
+  // detalhe do horário na primeira faixa de informação
+  const chip = $('#chip-horario');
+  if (chip) chip.textContent = estadoLoja.detalhe || '';
+
+  atualizarBotaoCheckout();
+
+  // reavalia de minuto em minuto, para virar sozinho na hora de abrir
+  if (!relogio) relogio = setInterval(atualizarStatusLoja, 60000);
+}
+
+function podePedir() {
+  return estadoLoja.aberta || (DB.config && DB.config.aceitaForaHorario);
+}
+
+function atualizarBotaoCheckout() {
+  const b = $('#btn-ir-checkout');
+  if (!b) return;
+  if (!podePedir()) {
+    b.disabled = true;
+    b.textContent = estadoLoja.proxima ? 'Fechada — ' + estadoLoja.detalhe : 'Loja fechada';
+  } else {
+    b.disabled = !carrinho.length;
+    b.textContent = estadoLoja.aberta ? 'Fechar pedido' : 'Encomendar para o próximo horário';
+  }
 }
 
 /* ---------------- montar item ---------------- */
@@ -275,7 +322,7 @@ function renderCarrinho() {
     $('#btn-ir-checkout').disabled = true;
     return;
   }
-  $('#btn-ir-checkout').disabled = false;
+  atualizarBotaoCheckout();
   corpo.innerHTML = carrinho.map((i) => `
     <div class="item-carrinho">
       <div class="item-carrinho__corpo">
@@ -308,6 +355,10 @@ function renderCheckout() {
   const pag = c.pagamentos;
 
   $('#form-checkout').innerHTML = `
+    ${!estadoLoja.aberta ? `<div class="aviso aviso--alerta">
+      <strong>Encomenda</strong> — a loja está fechada (${esc(estadoLoja.detalhe)}).
+      Seu pedido fica registrado e é preparado assim que abrirmos.
+    </div>` : ''}
     <div class="passo">
       <h3 class="passo__titulo"><span class="passo__num">1</span>Seus dados</h3>
       <div class="campo">
@@ -632,6 +683,7 @@ document.addEventListener('click', (ev) => {
 
   if (t.id === 'btn-ir-checkout') {
     if (!carrinho.length) return;
+    if (!podePedir()) { toast('A loja está fechada — ' + estadoLoja.detalhe); return; }
     const min = Number(DB.config.pedidoMinimo) || 0;
     if (min > 0 && subtotalCarrinho() < min) { toast('Pedido mínimo de ' + brl(min)); return; }
     fecharModal('modal-carrinho');

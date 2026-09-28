@@ -327,16 +327,49 @@ function htmlConfig() {
 
     <div class="caixa">
       <h2 class="caixa__titulo">Loja</h2>
-      <label class="interruptor" style="margin-bottom:14px">
-        <input type="checkbox" id="cfg-aberta" ${c.aberta ? 'checked' : ''}> Loja aberta para pedidos
+      <label class="interruptor" style="margin-bottom:6px">
+        <input type="checkbox" id="cfg-aberta" ${c.aberta ? 'checked' : ''}> Operando normalmente
       </label>
+      <p class="campo__dica" style="margin-bottom:14px">
+        Desmarque para fechar agora, mesmo dentro do horário — feriado, imprevisto, acabou o estoque.
+      </p>
       <div class="campo"><label class="campo__label" for="cfg-nome">Nome</label><input class="entrada" id="cfg-nome" value="${esc(c.nomeLoja)}"></div>
       <div class="campo"><label class="campo__label" for="cfg-endereco">Endereço</label><input class="entrada" id="cfg-endereco" value="${esc(c.endereco)}"></div>
-      <div class="campo"><label class="campo__label" for="cfg-horario">Horário</label><input class="entrada" id="cfg-horario" value="${esc(c.horario)}"></div>
       <div class="linha-campos">
         <div class="campo"><label class="campo__label" for="cfg-wpp">WhatsApp da loja</label><input class="entrada" id="cfg-wpp" value="${esc(c.whatsapp)}"><p class="campo__dica">Com DDI e DDD, só números.</p></div>
         <div class="campo"><label class="campo__label" for="cfg-insta">Instagram</label><input class="entrada" id="cfg-insta" value="${esc(c.instagram)}"></div>
       </div>
+    </div>
+
+    <div class="caixa">
+      <h2 class="caixa__titulo">Horário de funcionamento</h2>
+      <p class="caixa__sub">
+        A loja abre e fecha sozinha por esta tabela, no horário de Brasília.
+        Agora: <strong id="estado-agora">${esc(estadoDaLoja(c).texto)}</strong>
+        <span style="color:var(--creme-fraco)">(${esc(estadoDaLoja(c).detalhe)})</span>
+      </p>
+      ${[1,2,3,4,5,6,0].map((d) => {
+        const h = (c.horarios || {})[String(d)] || { abre: '14:00', fecha: '23:00', fechado: true };
+        return `
+        <div class="linha-edit linha-horario">
+          <span class="linha-edit__nome" style="min-width:78px;flex:none">${DIAS_CURTO[d]}</span>
+          <label class="interruptor"><input type="checkbox" data-dia-aberto="${d}" ${h.fechado ? '' : 'checked'}> abre</label>
+          <input class="entrada entrada--hora" type="time" value="${esc(h.abre)}" data-dia-abre="${d}" ${h.fechado ? 'disabled' : ''}>
+          <span style="color:var(--creme-fraco)">até</span>
+          <input class="entrada entrada--hora" type="time" value="${esc(h.fecha)}" data-dia-fecha="${d}" ${h.fechado ? 'disabled' : ''}>
+        </div>`;
+      }).join('')}
+      <p class="campo__dica" style="margin-top:12px">
+        Para fechar depois da meia-noite, coloque o fim menor que o início — 18:00 até 02:00, por exemplo.
+      </p>
+      <label class="interruptor" style="margin-top:14px">
+        <input type="checkbox" id="cfg-fora-horario" ${c.aceitaForaHorario ? 'checked' : ''}>
+        Aceitar encomenda com a loja fechada
+      </label>
+      <p class="campo__dica">
+        Desmarcado, o cliente vê o horário e não consegue fechar o pedido.
+        Marcado, ele encomenda e vocês preparam na abertura.
+      </p>
     </div>
 
     <div class="caixa">
@@ -402,6 +435,22 @@ function htmlConfig() {
   `;
 }
 
+function lerHorariosDoFormulario(c) {
+  const h = {};
+  [0,1,2,3,4,5,6].forEach((d) => {
+    const chk  = $(`[data-dia-aberto="${d}"]`);
+    const abre = $(`[data-dia-abre="${d}"]`);
+    const fim  = $(`[data-dia-fecha="${d}"]`);
+    if (!chk) { h[String(d)] = (c.horarios || {})[String(d)] || { abre:'14:00', fecha:'23:00', fechado:true }; return; }
+    h[String(d)] = {
+      abre: abre.value || '14:00',
+      fecha: fim.value || '23:00',
+      fechado: !chk.checked
+    };
+  });
+  return h;
+}
+
 async function guardarConfig() {
   const c = DB.config;
   const novo = {
@@ -409,8 +458,9 @@ async function guardarConfig() {
     aberta: $('#cfg-aberta').checked,
     nomeLoja: $('#cfg-nome').value.trim() || c.nomeLoja,
     endereco: $('#cfg-endereco').value.trim(),
-    horario: $('#cfg-horario').value.trim(),
     whatsapp: digits($('#cfg-wpp').value) || c.whatsapp,
+    horarios: lerHorariosDoFormulario(c),
+    aceitaForaHorario: $('#cfg-fora-horario').checked,
     instagram: $('#cfg-insta').value.trim().replace('@', ''),
     taxaEntrega: Number($('#cfg-taxa').value) || 0,
     pedidoMinimo: Number($('#cfg-min').value) || 0,
@@ -573,6 +623,13 @@ document.addEventListener('change', async (ev) => {
 
   try {
     if (t.id === 'chk-som') { somLigado = t.checked; if (somLigado) tocarAlerta(); return; }
+
+    if (d.diaAberto) {
+      const dia = d.diaAberto;
+      $(`[data-dia-abre="${dia}"]`).disabled = !t.checked;
+      $(`[data-dia-fecha="${dia}"]`).disabled = !t.checked;
+      return;
+    }
 
     if (t.id === 'max-comp') {
       DB.config.maxComplementos = Number(t.value) || 0;

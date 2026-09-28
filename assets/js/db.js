@@ -53,6 +53,9 @@ function normConfig(row, bairros) {
     instagram: row.instagram,
     tiktok: row.tiktok,
     aberta: row.aberta,
+    fechadoManual: row.aberta === false,
+    horarios: row.horarios || {},
+    aceitaForaHorario: !!row.aceita_fora_horario,
     taxaEntrega: Number(row.taxa_entrega),
     pedidoMinimo: Number(row.pedido_minimo),
     maxComplementos: row.max_complementos,
@@ -141,6 +144,9 @@ async function criarPedido(payload) {
 
 function traduzErro(msg) {
   const m = String(msg || '');
+  if (m.includes('LOJA_FECHADA')) {
+    return 'A loja está fechada no momento e não está aceitando pedidos. Volte no horário de atendimento.';
+  }
   if (m.includes('Pedido mínimo')) return m.replace(/^.*?(Pedido mínimo.*?)$/s, '$1');
   if (m.includes('indisponível')) return 'Um item do seu carrinho saiu do cardápio. Revise o pedido.';
   if (m.includes('vazio')) return 'Seu carrinho está vazio.';
@@ -254,6 +260,8 @@ async function salvarConfig(c) {
     instagram: c.instagram,
     tiktok: c.tiktok,
     aberta: c.aberta,
+    horarios: c.horarios || {},
+    aceita_fora_horario: !!c.aceitaForaHorario,
     taxa_entrega: paraNumero(c.taxaEntrega),
     pedido_minimo: paraNumero(c.pedidoMinimo),
     max_complementos: paraNumero(c.maxComplementos),

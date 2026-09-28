@@ -21,6 +21,8 @@ create table if not exists public.config (
   taxa_entrega    numeric(10,2) not null default 0 check (taxa_entrega >= 0),
   pedido_minimo   numeric(10,2) not null default 0 check (pedido_minimo >= 0),
   max_complementos int     not null default 0 check (max_complementos >= 0),
+  horarios        jsonb   not null default '{}'::jsonb,
+  aceita_fora_horario boolean not null default false,
   pagamentos      jsonb   not null default '{"pix":true,"cartao":true,"dinheiro":true}'::jsonb,
   pix             jsonb   not null default '{}'::jsonb,
   mensagens       jsonb   not null default '{}'::jsonb,
@@ -306,7 +308,7 @@ end $$;
 -- ---------------------------------------------------------
 
 insert into public.config (id, nome_loja, endereco, horario, whatsapp, instagram, tiktok,
-                           taxa_entrega, pagamentos, pix, mensagens)
+                           taxa_entrega, horarios, pagamentos, pix, mensagens)
 values (
   1,
   'Açaí Mais Chantilly',
@@ -316,6 +318,14 @@ values (
   'acai_mais_chantilly',
   'acaimaischantilly',
   5,
+  jsonb_build_object(
+    '0', jsonb_build_object('abre','14:00','fecha','23:00','fechado',false),
+    '1', jsonb_build_object('abre','14:00','fecha','23:00','fechado',false),
+    '2', jsonb_build_object('abre','14:00','fecha','23:00','fechado',false),
+    '3', jsonb_build_object('abre','14:00','fecha','23:00','fechado',false),
+    '4', jsonb_build_object('abre','14:00','fecha','23:00','fechado',false),
+    '5', jsonb_build_object('abre','14:00','fecha','23:00','fechado',false),
+    '6', jsonb_build_object('abre','14:00','fecha','23:00','fechado',false)),
   '{"pix":true,"cartao":true,"dinheiro":true}'::jsonb,
   jsonb_build_object(
     'chave','12996835226',
@@ -385,3 +395,7 @@ begin
     ('Calda de Blue Ice','Caldas',19),
     ('Calda de Tuti-frutti','Caldas',20);
 end $$;
+
+
+-- Horário automático e recusa de pedido fora do expediente:
+-- rode também supabase/migration-horarios.sql

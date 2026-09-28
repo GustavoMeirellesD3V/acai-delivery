@@ -141,3 +141,11 @@
 .perigo { border-color: rgba(251, 113, 133, .4); }
 .btn--perigo { background: rgba(251, 113, 133, .16); color: #ffd8de; border-color: rgba(251, 113, 133, .4); }
 .btn--perigo:hover { background: rgba(251, 113, 133, .28); }
+
+/* ---------------- tabela de horários ---------------- */
+.linha-horario { gap: 8px; flex-wrap: wrap; }
+.entrada--hora {
+  width: 116px; font-variant-numeric: tabular-nums;
+  text-align: center; padding-inline: 8px;
+}
+.entrada--hora:disabled { opacity: .4; }

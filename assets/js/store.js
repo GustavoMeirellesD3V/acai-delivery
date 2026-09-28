@@ -129,3 +129,162 @@ function mensagemStatus(pedido, statusId, config) {
     loja: config.nomeLoja
   });
 }
+
+/* =========================================================
+   Horário de funcionamento
+
+   A loja abre e fecha sozinha pelo horário da semana.
+   O cálculo é sempre no fuso de São Paulo — um cliente
+   acessando de outro fuso vê o status certo da loja.
+   ========================================================= */
+
+const DIAS = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
+const DIAS_CURTO = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+const FUSO = 'America/Sao_Paulo';
+
+/* "14:30" → 870 minutos. Devolve null se o formato não servir. */
+function paraMinutos(hhmm) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(hhmm || '').trim());
+  if (!m) return null;
+  const h = +m[1], min = +m[2];
+  if (h > 23 || min > 59) return null;
+  return h * 60 + min;
+}
+
+const paraHora = (min) =>
+  String(Math.floor(min / 60)).padStart(2, '0') + ':' + String(min % 60).padStart(2, '0');
+
+/* Momento atual no fuso da loja, independente de onde o cliente está. */
+function agoraNaLoja(quando) {
+  const d = quando || new Date();
+  const partes = new Intl.DateTimeFormat('en-US', {
+    timeZone: FUSO, weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false
+  }).formatToParts(d);
+
+  const p = {};
+  partes.forEach((x) => { p[x.type] = x.value; });
+
+  const semana = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  const hora = p.hour === '24' ? 0 : +p.hour;   // alguns ambientes devolvem 24 à meia-noite
+  return { dia: semana[p.weekday], minutos: hora * 60 + (+p.minute) };
+}
+
+const horarioDoDia = (config, dia) => (config.horarios || {})[String(dia)] || null;
+
+/* A loja está dentro de um turno neste instante?
+   Trata turno que vira a madrugada (ex.: 18:00 → 02:00). */
+function dentroDoTurno(config, dia, minutos) {
+  const h = horarioDoDia(config, dia);
+  if (!h || h.fechado) return false;
+  const abre = paraMinutos(h.abre), fecha = paraMinutos(h.fecha);
+  if (abre == null || fecha == null) return false;
+  if (fecha > abre) return minutos >= abre && minutos < fecha;
+  if (fecha < abre) return minutos >= abre;        // até a meia-noite; a madrugada é do dia seguinte
+  return false;                                     // abre == fecha: dia sem expediente
+}
+
+/* O turno de ontem ainda está rolando? (aberto 18:00 → 02:00, agora 01:00) */
+function sobraDeOntem(config, dia, minutos) {
+  const ontem = (dia + 6) % 7;
+  const h = horarioDoDia(config, ontem);
+  if (!h || h.fechado) return false;
+  const abre = paraMinutos(h.abre), fecha = paraMinutos(h.fecha);
+  if (abre == null || fecha == null || fecha >= abre) return false;
+  return minutos < fecha;
+}
+
+/* Quando abre de novo: varre os próximos 7 dias. */
+function proximaAbertura(config, dia, minutos) {
+  for (let i = 0; i < 8; i++) {
+    const d = (dia + i) % 7;
+    const h = horarioDoDia(config, d);
+    if (!h || h.fechado) continue;
+    const abre = paraMinutos(h.abre);
+    if (abre == null) continue;
+    if (i === 0 && minutos >= abre) continue;      // hoje já passou do horário de abrir
+    return { dia: d, hora: h.abre, ehHoje: i === 0, ehAmanha: i === 1 };
+  }
+  return null;
+}
+
+/* Estado completo da loja agora. */
+function estadoDaLoja(config, quando) {
+  const { dia, minutos } = agoraNaLoja(quando);
+
+  // interruptor manual: fecha na hora, independente do horário
+  if (config.fechadoManual) {
+    const prox = proximaAbertura(config, dia, minutos);
+    return { aberta: false, motivo: 'manual', proxima: prox,
+             texto: 'Fechada no momento', detalhe: textoProxima(prox) };
+  }
+
+  // sem horários configurados: cai no interruptor antigo
+  if (!config.horarios || !Object.keys(config.horarios).length) {
+    return { aberta: config.aberta !== false, motivo: 'sem-horario',
+             texto: config.aberta !== false ? 'Aberta agora' : 'Fechada', detalhe: '' };
+  }
+
+  if (dentroDoTurno(config, dia, minutos)) {
+    const fecha = horarioDoDia(config, dia).fecha;
+    const faltam = (paraMinutos(fecha) - minutos + 1440) % 1440;
+    return {
+      aberta: true, motivo: 'horario', texto: 'Aberta agora',
+      detalhe: faltam <= 60 ? `fecha às ${fecha} (em ${faltam} min)` : `até às ${fecha}`
+    };
+  }
+
+  if (sobraDeOntem(config, dia, minutos)) {
+    const fecha = horarioDoDia(config, (dia + 6) % 7).fecha;
+    return { aberta: true, motivo: 'horario', texto: 'Aberta agora', detalhe: `até às ${fecha}` };
+  }
+
+  const prox = proximaAbertura(config, dia, minutos);
+  return { aberta: false, motivo: 'horario', proxima: prox,
+           texto: 'Fechada agora', detalhe: textoProxima(prox) };
+}
+
+function textoProxima(prox) {
+  if (!prox) return 'sem horário definido';
+  if (prox.ehHoje) return `abre hoje às ${prox.hora}`;
+  if (prox.ehAmanha) return `abre amanhã às ${prox.hora}`;
+  return `abre ${DIAS[prox.dia]} às ${prox.hora}`;
+}
+
+/* Resumo da semana em linguagem humana, agrupando dias iguais.
+   "Seg a Sex 14:00–23:00 · Sáb e Dom 13:00–00:00 · Ter fechado" */
+function resumoSemana(config) {
+  const h = config.horarios;
+  if (!h || !Object.keys(h).length) return config.horario || '';
+
+  const ordem = [1, 2, 3, 4, 5, 6, 0];   // segunda → domingo
+  const chave = (d) => {
+    const x = h[String(d)];
+    if (!x || x.fechado) return 'fechado';
+    return x.abre + '–' + x.fecha;
+  };
+
+  const blocos = [];
+  ordem.forEach((d) => {
+    const k = chave(d);
+    const ult = blocos[blocos.length - 1];
+    if (ult && ult.k === k) ult.dias.push(d);
+    else blocos.push({ k, dias: [d] });
+  });
+
+  return blocos.map((b) => {
+    const nomes = b.dias.length === 1 ? DIAS_CURTO[b.dias[0]]
+      : b.dias.length === 2 ? `${DIAS_CURTO[b.dias[0]]} e ${DIAS_CURTO[b.dias[1]]}`
+      : `${DIAS_CURTO[b.dias[0]]} a ${DIAS_CURTO[b.dias[b.dias.length - 1]]}`;
+    return b.k === 'fechado' ? `${nomes} fechado` : `${nomes} ${b.k}`;
+  }).join(' · ');
+}
+
+const HORARIOS_PADRAO = {
+  '0': { abre: '14:00', fecha: '23:00', fechado: false },
+  '1': { abre: '14:00', fecha: '23:00', fechado: false },
+  '2': { abre: '14:00', fecha: '23:00', fechado: false },
+  '3': { abre: '14:00', fecha: '23:00', fechado: false },
+  '4': { abre: '14:00', fecha: '23:00', fechado: false },
+  '5': { abre: '14:00', fecha: '23:00', fechado: false },
+  '6': { abre: '14:00', fecha: '23:00', fechado: false }
+};
