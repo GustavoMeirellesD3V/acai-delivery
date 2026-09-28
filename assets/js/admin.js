@@ -42,6 +42,16 @@ async function mostrarPainel() {
   $('#admin-painel').hidden = false;
   $('#admin-nome-loja').textContent = DB.config ? DB.config.nomeLoja : '';
 
+  // O papel vem do banco. Esconder aba é conforto visual, não segurança:
+  // quem forçar o valor aqui continua barrado pelo RLS no servidor.
+  await carregarPapel();
+  aplicarPapelNasAbas();
+  vigiarInatividade(async () => {
+    await registrarEvento('SESSAO_EXPIRADA');
+    toast('Sessão expirada por inatividade.');
+    sair();
+  });
+
   $('#painel-conteudo').innerHTML = '<div class="vazio"><p>Carregando pedidos…</p></div>';
   try {
     await carregarPedidos();
@@ -59,6 +69,32 @@ function aoChegarPedido(p) {
   tocarAlerta();
   toast(`Pedido novo #${p.numero} — ${p.cliente.nome}`);
   if (abaAtual === 'pedidos') renderAba();
+}
+
+/* ---------------- confirmação de ação crítica ---------------- */
+function confirmar(titulo, detalhe) {
+  return new Promise((resolve) => {
+    const caixa = document.createElement('div');
+    caixa.className = 'modal';
+    caixa.innerHTML = `
+      <div class="modal__card" role="alertdialog" aria-modal="true" style="max-width:420px">
+        <div class="modal__cab"><h2 class="modal__titulo">Confirmar</h2></div>
+        <div class="modal__corpo">
+          <p style="font-weight:600;margin-bottom:8px">${esc(titulo)}</p>
+          ${detalhe ? `<p style="color:var(--creme-fraco);font-size:13.5px">${esc(detalhe)}</p>` : ''}
+        </div>
+        <div class="modal__pe">
+          <button class="btn btn--linha" data-nao style="flex:1">Cancelar</button>
+          <button class="btn btn--folha" data-sim style="flex:1">Confirmar</button>
+        </div>
+      </div>`;
+    document.body.appendChild(caixa);
+    const fim = (v) => { caixa.remove(); resolve(v); };
+    caixa.querySelector('[data-sim]').onclick = () => fim(true);
+    caixa.querySelector('[data-nao]').onclick = () => fim(false);
+    caixa.onclick = (e) => { if (e.target === caixa) fim(false); };
+    caixa.querySelector('[data-sim]').focus();
+  });
 }
 
 /* ---------------- alerta sonoro ----------------
@@ -86,6 +122,30 @@ function tocarAlerta() {
   } catch (e) { /* som é um extra, nunca quebra o painel */ }
 }
 
+/* ---------------- papéis ---------------- */
+const ABAS_POR_PAPEL = {
+  admin:     ['pedidos', 'cardapio', 'complementos', 'sabores', 'config', 'registro'],
+  gerente:   ['pedidos', 'cardapio', 'complementos', 'sabores', 'config', 'registro'],
+  atendente: ['pedidos']
+};
+
+function abasPermitidas() {
+  return ABAS_POR_PAPEL[papelAtual] || ABAS_POR_PAPEL.atendente;
+}
+
+function aplicarPapelNasAbas() {
+  const permitidas = abasPermitidas();
+  $$('#abas .aba').forEach((b) => { b.hidden = !permitidas.includes(b.dataset.aba); });
+  if (!permitidas.includes(abaAtual)) abaAtual = permitidas[0];
+
+  const selo = $('#selo-papel');
+  if (selo) {
+    const nomes = { admin: 'Administrador', gerente: 'Gerente', atendente: 'Atendente' };
+    selo.textContent = nomes[papelAtual] || 'Sem perfil';
+    selo.hidden = false;
+  }
+}
+
 /* ---------------- abas ---------------- */
 function renderAba() {
   $$('#abas .aba').forEach((b) => b.classList.toggle('aba--ativa', b.dataset.aba === abaAtual));
@@ -94,6 +154,7 @@ function renderAba() {
   else if (abaAtual === 'cardapio') alvo.innerHTML = htmlCardapio();
   else if (abaAtual === 'complementos') alvo.innerHTML = htmlComplementos();
   else if (abaAtual === 'sabores') alvo.innerHTML = htmlSabores();
+  else if (abaAtual === 'registro') { alvo.innerHTML = '<div class="vazio"><p>Carregando registro…</p></div>'; mostrarRegistro(); }
   else alvo.innerHTML = htmlConfig();
 }
 
@@ -179,7 +240,7 @@ function htmlPedido(p) {
           <button class="btn btn--sm btn--folha" data-imprimir="${p.id}">🧾 Imprimir cupom</button>
           <a class="btn btn--sm btn--flor" href="${waLink(p.cliente.telefoneBruto, mensagemStatus(p, p.status, DB.config))}" target="_blank" rel="noopener">Reenviar aviso de "${st.label}"</a>
           <a class="btn btn--sm btn--linha" href="${waLink(p.cliente.telefoneBruto, 'Olá ' + p.cliente.nome.split(' ')[0] + '! Sobre o pedido #' + p.numero + ': ')}" target="_blank" rel="noopener">Abrir conversa</a>
-          <button class="btn btn--sm btn--perigo" data-excluir="${p.id}">Excluir</button>
+          ${podeExcluirPedido() ? `<button class="btn btn--sm btn--perigo" data-excluir="${p.id}">Excluir</button>` : ''}
         </div>
       </div>` : ''}
     </article>`;
@@ -316,6 +377,73 @@ function htmlSabores() {
         <button class="btn btn--sm btn--folha" id="btn-add-sabor">Adicionar</button>
       </div>
     </div>`;
+}
+
+/* ---------------- aba: registro de auditoria ---------------- */
+const ROTULO_ACAO = {
+  INSERT: 'criou', UPDATE: 'alterou', DELETE: 'excluiu',
+  LOGIN: 'entrou', LOGOUT: 'saiu', SESSAO_EXPIRADA: 'sessão expirou'
+};
+const ROTULO_TABELA = {
+  produtos: 'produto', tamanhos: 'tamanho/preço', complementos: 'complemento',
+  sabores: 'sabor', bairros: 'bairro', config: 'configurações',
+  pedidos: 'pedido', sessao: 'conta'
+};
+
+async function mostrarRegistro() {
+  let linhas;
+  try {
+    linhas = await carregarAuditoria(150);
+  } catch (e) {
+    $('#painel-conteudo').innerHTML =
+      `<div class="aviso aviso--erro">Não foi possível ler o registro: ${esc(e.message)}</div>`;
+    return;
+  }
+  $('#painel-conteudo').innerHTML = htmlRegistro(linhas);
+}
+
+function resumoMudanca(l) {
+  if (l.tabela === 'sessao') return '';
+  if (l.acao === 'UPDATE' && l.antes && l.depois) {
+    const mudou = Object.keys(l.depois).filter((k) =>
+      JSON.stringify(l.antes[k]) !== JSON.stringify(l.depois[k]) && k !== 'atualizado_em');
+    return mudou.slice(0, 3).map((k) => {
+      const de = l.antes[k], para = l.depois[k];
+      const curto = (v) => {
+        const t = typeof v === 'object' ? JSON.stringify(v) : String(v);
+        return t.length > 28 ? t.slice(0, 28) + '…' : t;
+      };
+      return `${k}: ${curto(de)} → ${curto(para)}`;
+    }).join(' · ');
+  }
+  const alvo = l.depois || l.antes || {};
+  return alvo.nome ? String(alvo.nome) : (alvo.cliente_nome ? String(alvo.cliente_nome) : '');
+}
+
+function htmlRegistro(linhas) {
+  return `
+    <h1 class="painel__titulo">Registro de atividade</h1>
+    <p class="painel__sub">
+      Quem mexeu no quê e quando. Gravado pelo banco, não pelo navegador — não dá para apagar daqui.
+    </p>
+    <div class="aviso aviso--info">
+      O registro nunca guarda senha, token ou dado de pagamento. Só a ação, o autor e o horário.
+    </div>
+    ${linhas.length ? `<div class="caixa" style="padding:0;overflow-x:auto">
+      <table class="tabela-log">
+        <thead><tr><th>Quando</th><th>Quem</th><th>O quê</th><th>Detalhe</th></tr></thead>
+        <tbody>
+          ${linhas.map((l) => `
+            <tr>
+              <td class="log-hora">${esc(new Date(l.em).toLocaleString('pt-BR', {
+                day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }))}</td>
+              <td>${esc(l.usuario || 'cliente')}${l.papel ? `<span class="log-papel">${esc(l.papel)}</span>` : ''}</td>
+              <td>${esc(ROTULO_ACAO[l.acao] || l.acao)} ${esc(ROTULO_TABELA[l.tabela] || l.tabela)}</td>
+              <td class="log-detalhe">${esc(resumoMudanca(l))}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>` : '<div class="vazio"><div class="vazio__icone">📋</div><p>Nenhum evento registrado ainda.</p></div>'}`;
 }
 
 /* ---------------- aba: configurações ---------------- */
@@ -522,9 +650,11 @@ document.addEventListener('click', async (ev) => {
   if (d.imprimir) { imprimirCupom(d.imprimir); return; }
 
   if (d.excluir) {
-    if (t.dataset.confirmar !== '1') { t.dataset.confirmar = '1'; t.textContent = 'Confirmar exclusão'; return; }
+    const p = DB.pedidos.find((x) => x.id === d.excluir);
+    if (!await confirmar(`Excluir o pedido #${p ? p.numero : ''}?`,
+                         'A exclusão fica registrada no log e não pode ser desfeita.')) return;
     try { await excluirPedido(d.excluir); renderAba(); toast('Pedido excluído'); }
-    catch (e) { toast('Erro: ' + e.message); }
+    catch (e) { toast(e.message.includes('policy') ? 'Seu perfil não pode excluir pedidos.' : 'Erro: ' + e.message); }
     return;
   }
 
@@ -542,6 +672,8 @@ document.addEventListener('click', async (ev) => {
     return;
   }
   if (d.tamRemover) {
+    if (!await confirmar('Remover este item do cardápio?',
+                         'A remoção fica registrada no log.')) return;
     try {
       await removerLinha('tamanhos', d.tamRemover);
       DB.produtos.forEach((p) => { p.tamanhos = p.tamanhos.filter((x) => x.id !== d.tamRemover); });
@@ -565,6 +697,8 @@ document.addEventListener('click', async (ev) => {
     return;
   }
   if (d.compRemover) {
+    if (!await confirmar('Remover este item do cardápio?',
+                         'A remoção fica registrada no log.')) return;
     try {
       await removerLinha('complementos', d.compRemover);
       DB.complementos = DB.complementos.filter((c) => c.id !== d.compRemover);
@@ -585,6 +719,8 @@ document.addEventListener('click', async (ev) => {
     return;
   }
   if (d.saborRemover) {
+    if (!await confirmar('Remover este item do cardápio?',
+                         'A remoção fica registrada no log.')) return;
     try {
       await removerLinha('sabores', d.saborRemover);
       DB.sabores = DB.sabores.filter((s) => s.id !== d.saborRemover);
@@ -638,6 +774,21 @@ document.addEventListener('change', async (ev) => {
 
     if (d.tamNome || d.tamPreco) {
       const id = d.tamNome || d.tamPreco;
+      // Alterar preço é ação crítica: pede confirmação antes de gravar.
+      if (d.tamPreco) {
+        const antes = (() => {
+          let v = null;
+          DB.produtos.forEach((p) => p.tamanhos.forEach((x) => { if (x.id === id) v = x.preco; }));
+          return v;
+        })();
+        const novoValor = Number(t.value) || 0;
+        if (antes !== novoValor && !await confirmar(
+              `Alterar o preço de ${brl(antes)} para ${brl(novoValor)}?`,
+              'O novo valor passa a valer na loja imediatamente.')) {
+          t.value = antes;
+          return;
+        }
+      }
       const campo = d.tamNome ? { nome: t.value } : { preco: Number(t.value) || 0 };
       await salvarLinha('tamanhos', id, campo);
       DB.produtos.forEach((p) => p.tamanhos.forEach((x) => {

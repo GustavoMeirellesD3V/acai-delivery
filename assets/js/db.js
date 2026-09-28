@@ -142,15 +142,27 @@ async function criarPedido(payload) {
   return data;
 }
 
+/* Traduz o erro do banco para uma frase que o cliente entende.
+   O texto cru do Postgres nunca chega à tela: evita vazar nome de
+   função, tabela ou qualquer detalhe interno do servidor. */
 function traduzErro(msg) {
   const m = String(msg || '');
+
   if (m.includes('LOJA_FECHADA')) {
     return 'A loja está fechada no momento e não está aceitando pedidos. Volte no horário de atendimento.';
   }
-  if (m.includes('Pedido mínimo')) return m.replace(/^.*?(Pedido mínimo.*?)$/s, '$1');
-  if (m.includes('indisponível')) return 'Um item do seu carrinho saiu do cardápio. Revise o pedido.';
-  if (m.includes('vazio')) return 'Seu carrinho está vazio.';
-  if (m.includes('inválido')) return 'Confira seu nome e telefone.';
+  if (m.includes('MUITOS_PEDIDOS')) {
+    return 'Muitos pedidos seguidos deste aparelho. Aguarde alguns minutos e tente de novo — '
+         + 'se for urgente, chame no WhatsApp da loja.';
+  }
+  if (m.includes('INDISPONIVEL')) {
+    return 'Um item do seu carrinho saiu do cardápio. Revise o pedido.';
+  }
+  if (m.includes('DADOS_INVALIDOS')) {
+    // a parte depois dos dois-pontos é escrita por nós, é segura de mostrar
+    const detalhe = m.split('DADOS_INVALIDOS:')[1];
+    return detalhe ? 'Confira os dados: ' + detalhe.trim() + '.' : 'Confira os dados do pedido.';
+  }
   if (m.includes('Failed to fetch') || m.includes('NetworkError')) {
     return 'Sem conexão com o servidor. Verifique sua internet e tente de novo.';
   }
@@ -163,15 +175,23 @@ async function entrar(email, senha) {
   if (!s) throw new Error(erroConexao);
   const { data, error } = await s.auth.signInWithPassword({ email, password: senha });
   if (error) {
-    if (/invalid login/i.test(error.message)) throw new Error('E-mail ou senha incorretos.');
-    if (/email not confirmed/i.test(error.message)) throw new Error('Confirme o e-mail antes de entrar.');
-    throw new Error(error.message);
+    // Nunca dizemos se o erro foi no e-mail ou na senha: isso revelaria
+    // quais contas existem (enumeração de usuários).
+    if (/rate|too many/i.test(error.message)) {
+      throw new Error('Muitas tentativas. Aguarde alguns minutos antes de tentar de novo.');
+    }
+    throw new Error('E-mail ou senha incorretos.');
   }
+  await carregarPapel();
+  await registrarEvento('LOGIN');
   return data.user;
 }
 
 async function sairDaConta() {
   const s = cliente();
+  await registrarEvento('LOGOUT');
+  pararVigia();
+  papelAtual = null;
   if (s) await s.auth.signOut();
 }
 
@@ -180,6 +200,54 @@ async function usuarioAtual() {
   if (!s) return null;
   const { data } = await s.auth.getSession();
   return data.session ? data.session.user : null;
+}
+
+/* Papel do usuário logado: admin, gerente ou atendente.
+   Vem do banco — o navegador não decide o próprio nível de acesso.
+   Mesmo que alguém force este valor no DevTools, o RLS no servidor
+   continua barrando: esconder botão não é controle de acesso. */
+let papelAtual = null;
+
+async function carregarPapel() {
+  const s = cliente();
+  if (!s) return null;
+  const { data, error } = await s.rpc('meu_papel');
+  papelAtual = error ? null : data;
+  return papelAtual;
+}
+
+const ehAdmin   = () => papelAtual === 'admin';
+const podeEditarCardapio = () => papelAtual === 'admin' || papelAtual === 'gerente';
+const podeExcluirPedido  = () => papelAtual === 'admin' || papelAtual === 'gerente';
+
+/* Sessão expira por inatividade. O Supabase mantém o token válido por
+   bem mais tempo; aqui encurtamos para o balcão, onde o painel costuma
+   ficar aberto num aparelho compartilhado. */
+const INATIVIDADE_MAX = 8 * 60 * 60 * 1000;   // 8 horas
+let ultimoUso = Date.now();
+let vigia = null;
+
+function marcarAtividade() { ultimoUso = Date.now(); }
+
+function vigiarInatividade(aoExpirar) {
+  ['click', 'keydown', 'touchstart'].forEach((ev) =>
+    document.addEventListener(ev, marcarAtividade, { passive: true }));
+  clearInterval(vigia);
+  vigia = setInterval(() => {
+    if (Date.now() - ultimoUso > INATIVIDADE_MAX) {
+      clearInterval(vigia);
+      aoExpirar();
+    }
+  }, 60000);
+}
+
+function pararVigia() { clearInterval(vigia); vigia = null; }
+
+/* Registra no log do banco quem entrou e quem saiu. */
+async function registrarEvento(acao) {
+  const s = cliente();
+  if (!s) return;
+  try { await s.rpc('registrar_acesso', { p_acao: acao }); } catch (e) { /* log é best-effort */ }
 }
 
 /* ---------------- painel: pedidos ---------------- */
@@ -215,6 +283,21 @@ async function excluirPedido(pedidoId) {
   const { error } = await s.from('pedidos').delete().eq('id', pedidoId);
   if (error) throw new Error(error.message);
   DB.pedidos = DB.pedidos.filter((p) => p.id !== pedidoId);
+}
+
+/* ---------------- painel: registro de auditoria ---------------- */
+async function carregarAuditoria(limite) {
+  const s = cliente();
+  const { data, error } = await s
+    .from('auditoria')
+    .select('em,usuario,papel,acao,tabela,antes,depois')
+    .order('em', { ascending: false })
+    .limit(limite || 150);
+  if (error) {
+    throw new Error(/permission|policy/i.test(error.message)
+      ? 'Seu perfil não tem acesso ao registro.' : error.message);
+  }
+  return data;
 }
 
 /* ---------------- painel: tempo real ---------------- */

@@ -149,3 +149,23 @@
   text-align: center; padding-inline: 8px;
 }
 .entrada--hora:disabled { opacity: .4; }
+
+/* ---------------- registro de auditoria ---------------- */
+.tabela-log { width: 100%; border-collapse: collapse; font-size: 13px; }
+.tabela-log th {
+  text-align: left; padding: 11px 14px; font-size: 11px;
+  letter-spacing: .14em; text-transform: uppercase;
+  color: var(--creme-fraco); font-weight: 700;
+  border-bottom: 1px solid var(--borda-forte); white-space: nowrap;
+}
+.tabela-log td { padding: 10px 14px; border-bottom: 1px solid var(--borda); vertical-align: top; }
+.tabela-log tr:last-child td { border-bottom: 0; }
+.log-hora { white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--creme-fraco); }
+.log-papel {
+  display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px;
+  font-size: 10.5px; background: rgba(255,255,255,.08); color: var(--creme-fraco);
+}
+.log-detalhe {
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  font-size: 11.5px; color: var(--flor-suave); word-break: break-word; max-width: 340px;
+}

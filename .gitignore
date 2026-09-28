@@ -1,5 +1,18 @@
+# dependências e build
 node_modules/
 preview/
 .vercel
+
+# segredos — NUNCA versionar
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets.json
+service-role*.txt
+
+# sistema
 .DS_Store
 Thumbs.db
+desktop.ini
