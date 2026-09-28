@@ -308,7 +308,12 @@ function htmlCardapio() {
             <input type="checkbox" data-prod-ativo="${p.id}" ${p.ativo ? 'checked' : ''}> visível na loja
           </label>
         </h2>
-        <p class="caixa__sub">${esc(p.descricao || '')}</p>
+        <div class="campo" style="margin-bottom:16px">
+          <label class="campo__label" for="desc-${p.id}">Descrição que aparece na loja</label>
+          <input class="entrada" id="desc-${p.id}" value="${esc(p.descricao || '')}"
+                 data-prod-desc="${p.id}" maxlength="160"
+                 placeholder="Ex.: Açaí cremoso batido na hora, com todos os complementos inclusos.">
+        </div>
         ${p.tamanhos.map((t) => `
           <div class="linha-edit">
             <input class="entrada entrada--nome" value="${esc(t.nome)}" data-tam-nome="${t.id}">
@@ -799,6 +804,12 @@ document.addEventListener('change', async (ev) => {
     if (d.tamAtivo) {
       await salvarLinha('tamanhos', d.tamAtivo, { ativo: t.checked });
       DB.produtos.forEach((p) => p.tamanhos.forEach((x) => { if (x.id === d.tamAtivo) x.ativo = t.checked; }));
+      return;
+    }
+    if (d.prodDesc) {
+      await salvarLinha('produtos', d.prodDesc, { descricao: t.value.trim() });
+      DB.produtos.find((p) => p.id === d.prodDesc).descricao = t.value.trim();
+      toast('Descrição salva');
       return;
     }
     if (d.prodAtivo) {
