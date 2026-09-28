@@ -1,0 +1,143 @@
+/* =========================================================
+   Açaí Mais Chantilly — painel do lojista
+   ========================================================= */
+
+.login-tela {
+  min-height: 100vh; display: grid; place-items: center; padding: 24px 18px;
+}
+.login-card {
+  width: 100%; max-width: 380px; padding: 28px;
+  border-radius: var(--raio-lg); border: 1px solid var(--borda-forte);
+  background: linear-gradient(180deg, var(--uva-700), var(--uva-800));
+  box-shadow: var(--sombra);
+}
+.login-card__topo { text-align: center; margin-bottom: 22px; }
+.login-card__titulo { font-size: 25px; font-weight: 800; margin-top: 10px; }
+.login-card__sub { font-size: 13px; color: var(--creme-fraco); margin-top: 4px; }
+
+/* ---------------- estrutura do painel ---------------- */
+.admin-topo {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 40;
+  background: rgba(29, 6, 41, .9); backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--borda);
+}
+.admin-topo__in { display: flex; align-items: center; gap: 12px; padding-block: 11px; }
+
+.abas {
+  display: flex; gap: 6px; overflow-x: auto; padding-block: 9px;
+  scrollbar-width: none;
+}
+.abas::-webkit-scrollbar { display: none; }
+.aba {
+  padding: 8px 15px; border-radius: 999px; border: 1px solid var(--borda);
+  background: rgba(255, 255, 255, .05); cursor: pointer;
+  font-size: 13.5px; font-weight: 600; white-space: nowrap;
+}
+.aba:hover { background: rgba(255, 255, 255, .1); }
+.aba--ativa { background: var(--flor); color: #3b0030; border-color: transparent; }
+
+.painel { padding-block: 22px 60px; }
+.painel__titulo { font-size: 24px; font-weight: 800; margin-bottom: 4px; }
+.painel__sub { font-size: 13px; color: var(--creme-fraco); margin-bottom: 18px; }
+
+.caixa {
+  border: 1px solid var(--borda); border-radius: var(--raio);
+  background: rgba(0, 0, 0, .2); padding: 18px; margin-bottom: 16px;
+}
+.caixa__titulo {
+  font-family: var(--display); font-size: 18px; font-weight: 700;
+  margin-bottom: 4px; display: flex; align-items: center; gap: 10px;
+}
+.caixa__sub { font-size: 12.5px; color: var(--creme-fraco); margin-bottom: 14px; }
+
+/* ---------------- métricas ---------------- */
+.metricas {
+  display: grid; gap: 12px; margin-bottom: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+.metrica {
+  padding: 15px; border-radius: var(--raio);
+  border: 1px solid var(--borda); background: rgba(255, 255, 255, .05);
+}
+.metrica__rotulo {
+  font-size: 11px; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--creme-fraco);
+}
+.metrica__valor {
+  font-family: var(--display); font-size: 27px; font-weight: 800; margin-top: 3px;
+  font-variant-numeric: tabular-nums;
+}
+.metrica--destaque { border-color: rgba(141, 198, 63, .45); background: rgba(141, 198, 63, .12); }
+.metrica--destaque .metrica__valor { color: var(--folha); }
+
+/* ---------------- pedidos ---------------- */
+.filtros { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 16px; }
+
+.pedido {
+  border: 1px solid var(--borda); border-radius: var(--raio);
+  background: rgba(0, 0, 0, .22); margin-bottom: 12px; overflow: hidden;
+}
+.pedido__cab {
+  display: flex; align-items: center; gap: 12px; padding: 14px 16px;
+  cursor: pointer; width: 100%; background: none; border: 0; text-align: left;
+}
+.pedido__cab:hover { background: rgba(255, 255, 255, .04); }
+.pedido__num {
+  font-family: var(--display); font-size: 19px; font-weight: 800;
+  font-variant-numeric: tabular-nums; flex: none;
+}
+.pedido__info { min-width: 0; flex: 1; }
+.pedido__cliente { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pedido__hora { font-size: 12px; color: var(--creme-fraco); }
+.pedido__valor { font-weight: 800; color: var(--folha); font-variant-numeric: tabular-nums; flex: none; }
+.pedido__corpo { padding: 0 16px 16px; border-top: 1px solid var(--borda); padding-top: 14px; }
+
+.selo {
+  display: inline-flex; align-items: center; gap: 5px; flex: none;
+  padding: 3px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 700;
+  border: 1px solid currentColor;
+}
+.selo--azul { color: var(--info); background: rgba(96, 165, 250, .13); }
+.selo--amarelo { color: var(--alerta); background: rgba(251, 191, 36, .13); }
+.selo--roxo { color: var(--flor-suave); background: rgba(255, 95, 208, .13); }
+.selo--verde { color: var(--ok); background: rgba(74, 222, 128, .13); }
+.selo--vermelho { color: var(--erro); background: rgba(251, 113, 133, .13); }
+
+.detalhe-linha { display: flex; gap: 10px; padding: 5px 0; font-size: 13.5px; }
+.detalhe-linha__rotulo { color: var(--creme-fraco); flex: none; min-width: 92px; }
+.detalhe-linha__valor { word-break: break-word; }
+
+.itens-pedido {
+  margin: 12px 0; padding: 12px; border-radius: var(--raio-sm);
+  background: rgba(0, 0, 0, .3); font-size: 13.5px;
+}
+.itens-pedido pre {
+  margin: 0; font-family: inherit; white-space: pre-wrap; word-break: break-word;
+}
+
+.acoes-pedido { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 14px; }
+
+/* ---------------- listas editáveis ---------------- */
+.linha-edit {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 10px 0; border-bottom: 1px solid var(--borda);
+}
+.linha-edit:last-of-type { border-bottom: 0; }
+.linha-edit__nome { flex: 1; min-width: 130px; font-weight: 600; }
+.linha-edit .entrada { width: auto; }
+.entrada--preco { width: 104px; font-variant-numeric: tabular-nums; }
+.entrada--nome { flex: 1; min-width: 150px; }
+
+.interruptor { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; cursor: pointer; }
+.interruptor input { accent-color: var(--folha); width: 17px; height: 17px; }
+
+.add-linha { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+
+.grupo-titulo {
+  font-size: 11px; letter-spacing: .18em; text-transform: uppercase;
+  color: var(--flor); font-weight: 700; margin: 16px 0 6px;
+}
+
+.perigo { border-color: rgba(251, 113, 133, .4); }
+.btn--perigo { background: rgba(251, 113, 133, .16); color: #ffd8de; border-color: rgba(251, 113, 133, .4); }
+.btn--perigo:hover { background: rgba(251, 113, 133, .28); }

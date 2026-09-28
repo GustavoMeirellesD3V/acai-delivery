@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Açaí Mais Chantilly</title>
+<meta name="description" content="Delivery de açaí e cupuaçu em Cachoeira Paulista. Monte o seu, escolha os complementos e peça pelo WhatsApp.">
+<meta name="theme-color" content="#1d0629">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="assets/css/style.css">
+<link rel="stylesheet" href="assets/css/admin.css">
+</head>
+<body>
+
+<!-- ============================ CARGA ============================ -->
+<div id="boot" class="boot">
+  <div class="boot__copo">🍧</div>
+  <p>Carregando o cardápio…</p>
+</div>
+
+<div id="erro-fatal" class="boot" hidden>
+  <div class="boot__copo">⚠️</div>
+  <h1 style="font-size:20px;margin-bottom:8px">Não foi possível carregar a loja</h1>
+  <p id="erro-fatal-msg" style="max-width:38ch;color:var(--creme-fraco)"></p>
+</div>
+
+<!-- ============================ LOJA ============================ -->
+<div id="view-loja" hidden>
+
+  <header class="topo">
+    <div class="wrap topo__in">
+      <div class="marca">
+        <svg class="marca__copo" viewBox="0 0 48 48" aria-hidden="true">
+          <path d="M12 16h24l-3 24a4 4 0 0 1-4 3.5H19a4 4 0 0 1-4-3.5z" fill="#4b1a69" stroke="#ff5fd0" stroke-width="2"/>
+          <path d="M14 22h20l-2.4 18H16.4z" fill="#2b0c3d"/>
+          <path d="M11 16c1-5 6-8 13-8s12 3 13 8z" fill="#f7f1fb"/>
+          <circle cx="24" cy="6" r="3" fill="#8dc63f"/>
+        </svg>
+        <div class="marca__txt">
+          <div class="marca__nome" id="marca-nome">Açaí Mais Chantilly</div>
+          <div class="marca__sub">Delivery • Cachoeira Paulista</div>
+        </div>
+      </div>
+      <div class="topo__acoes">
+        <span id="status-loja" class="pill pill--aberta"><span class="pill__dot"></span>Aberta</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="wrap hero">
+      <p class="hero__eyebrow">Monte o seu</p>
+      <h1 class="hero__titulo">AÇAÍ &amp; <em>CUPUAÇU</em></h1>
+      <p class="hero__texto">Batido na hora, do 300 ml ao litro. Todos os complementos são grátis — escolha quantos quiser e receba em casa.</p>
+      <div class="hero__meta" id="hero-meta"></div>
+      <div id="aviso-fechada" class="aviso-fechada" hidden>
+        A loja está fechada no momento. Você pode montar o pedido, mas ele só será preparado no próximo horário de atendimento.
+      </div>
+      <div class="hero__botoes">
+        <a class="btn btn--folha" href="#cardapio">Ver cardápio</a>
+        <a class="btn btn--linha" href="#info">Endereço e horário</a>
+      </div>
+    </section>
+
+    <section class="wrap secao" id="cardapio">
+      <div class="secao__cab">
+        <h2 class="secao__titulo">TAMANHOS E PREÇOS</h2>
+        <span class="secao__nota">Toque em um tamanho para montar</span>
+      </div>
+      <div class="grid-produtos" id="lista-produtos"></div>
+    </section>
+
+    <section class="wrap secao" id="complementos">
+      <div class="secao__cab"><h2 class="secao__titulo">COMPLEMENTOS</h2></div>
+      <div class="faixa-gratis">🎉 Todos os complementos são grátis!</div>
+      <div id="lista-complementos"></div>
+    </section>
+
+    <section class="wrap secao" id="sabores">
+      <div class="secao__cab">
+        <h2 class="secao__titulo">AÇAÍ SABORIZADO</h2>
+        <span class="secao__nota">Escolha o sabor ao montar seu copo</span>
+      </div>
+      <div class="chips" id="lista-sabores"></div>
+    </section>
+
+    <section class="wrap secao" id="info">
+      <div class="secao__cab"><h2 class="secao__titulo">A LOJA</h2></div>
+      <div class="grid-info" id="blocos-info"></div>
+    </section>
+
+    <footer class="wrap rodape">
+      <div class="rodape__links" id="rodape-links"></div>
+      <p id="rodape-endereco"></p>
+      <p style="margin-top:10px">
+        <a href="#admin" id="link-admin">Área do lojista</a>
+      </p>
+    </footer>
+  </main>
+
+  <div class="barra-carrinho" id="barra-carrinho" hidden>
+    <div class="barra-carrinho__in">
+      <div class="barra-carrinho__txt">
+        <div class="barra-carrinho__qtd" id="barra-qtd">0 itens</div>
+        <div class="barra-carrinho__total" id="barra-total">R$ 0,00</div>
+      </div>
+      <button class="btn btn--folha" id="btn-abrir-carrinho" style="margin-left:auto">Ver carrinho</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================ ADMIN ============================ -->
+<div id="view-admin" hidden>
+  <div id="admin-login" class="login-tela">
+    <form class="login-card" id="form-login">
+      <div class="login-card__topo">
+        <svg width="46" height="46" viewBox="0 0 48 48" aria-hidden="true">
+          <path d="M12 16h24l-3 24a4 4 0 0 1-4 3.5H19a4 4 0 0 1-4-3.5z" fill="#4b1a69" stroke="#ff5fd0" stroke-width="2"/>
+          <path d="M11 16c1-5 6-8 13-8s12 3 13 8z" fill="#f7f1fb"/>
+        </svg>
+        <h1 class="login-card__titulo">Área do lojista</h1>
+        <p class="login-card__sub">Gerencie pedidos, cardápio e preços</p>
+      </div>
+      <div class="campo">
+        <label class="campo__label" for="login-email">E-mail</label>
+        <input class="entrada" id="login-email" type="email" autocomplete="username" required>
+      </div>
+      <div class="campo">
+        <label class="campo__label" for="login-senha">Senha</label>
+        <input class="entrada" id="login-senha" type="password" autocomplete="current-password" required>
+      </div>
+      <div id="login-erro" class="aviso aviso--erro" hidden></div>
+      <button class="btn btn--folha btn--bloco" type="submit" id="btn-login">Entrar</button>
+      <p style="text-align:center;margin-top:14px"><a href="#" id="voltar-loja">← Voltar para a loja</a></p>
+    </form>
+  </div>
+
+  <div id="admin-painel" hidden>
+    <header class="admin-topo">
+      <div class="wrap admin-topo__in">
+        <div class="marca">
+          <div class="marca__txt">
+            <div class="marca__nome">Painel do lojista</div>
+            <div class="marca__sub" id="admin-nome-loja">Açaí Mais Chantilly</div>
+          </div>
+        </div>
+        <div class="topo__acoes">
+          <button class="btn btn--linha btn--sm" id="btn-ver-loja">Ver loja</button>
+          <button class="btn btn--linha btn--sm" id="btn-sair">Sair</button>
+        </div>
+      </div>
+      <div class="wrap">
+        <nav class="abas" id="abas">
+          <button class="aba aba--ativa" data-aba="pedidos">Pedidos</button>
+          <button class="aba" data-aba="cardapio">Cardápio e preços</button>
+          <button class="aba" data-aba="complementos">Complementos</button>
+          <button class="aba" data-aba="sabores">Sabores</button>
+          <button class="aba" data-aba="config">Configurações</button>
+        </nav>
+      </div>
+    </header>
+    <main class="wrap painel" id="painel-conteudo"></main>
+  </div>
+</div>
+
+<!-- ============================ MODAIS ============================ -->
+<div class="modal" id="modal-montar" hidden>
+  <div class="modal__card" role="dialog" aria-modal="true" aria-labelledby="montar-titulo">
+    <div class="modal__cab">
+      <div>
+        <h2 class="modal__titulo" id="montar-titulo">Montar</h2>
+        <p class="modal__sub" id="montar-sub"></p>
+      </div>
+      <button class="modal__fechar" data-fechar aria-label="Fechar">×</button>
+    </div>
+    <div class="modal__corpo" id="montar-corpo"></div>
+    <div class="modal__pe">
+      <div class="qtd">
+        <button class="qtd__btn" id="montar-menos" aria-label="Diminuir">−</button>
+        <span class="qtd__valor" id="montar-qtd">1</span>
+        <button class="qtd__btn" id="montar-mais" aria-label="Aumentar">+</button>
+      </div>
+      <button class="btn btn--folha" id="montar-add" style="margin-left:auto;flex:1">Adicionar • R$ 0,00</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="modal-carrinho" hidden>
+  <div class="modal__card" role="dialog" aria-modal="true" aria-labelledby="carrinho-titulo">
+    <div class="modal__cab">
+      <h2 class="modal__titulo" id="carrinho-titulo">Seu pedido</h2>
+      <button class="modal__fechar" data-fechar aria-label="Fechar">×</button>
+    </div>
+    <div class="modal__corpo" id="carrinho-corpo"></div>
+    <div class="modal__pe">
+      <button class="btn btn--linha" data-fechar>Continuar</button>
+      <button class="btn btn--folha" id="btn-ir-checkout" style="flex:1">Fechar pedido</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="modal-checkout" hidden>
+  <div class="modal__card modal__card--largo" role="dialog" aria-modal="true" aria-labelledby="checkout-titulo">
+    <div class="modal__cab">
+      <div>
+        <h2 class="modal__titulo" id="checkout-titulo">Finalizar pedido</h2>
+        <p class="modal__sub">Seus dados vão junto na mensagem do WhatsApp</p>
+      </div>
+      <button class="modal__fechar" data-fechar aria-label="Fechar">×</button>
+    </div>
+    <div class="modal__corpo">
+      <form id="form-checkout" novalidate></form>
+    </div>
+    <div class="modal__pe">
+      <button class="btn btn--folha btn--bloco" id="btn-enviar-pedido">Enviar pedido pelo WhatsApp</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="modal-sucesso" hidden>
+  <div class="modal__card" role="dialog" aria-modal="true" aria-labelledby="sucesso-titulo">
+    <div class="modal__cab">
+      <h2 class="modal__titulo" id="sucesso-titulo">Pedido enviado</h2>
+      <button class="modal__fechar" data-fechar aria-label="Fechar">×</button>
+    </div>
+    <div class="modal__corpo" id="sucesso-corpo"></div>
+    <div class="modal__pe">
+      <button class="btn btn--folha btn--bloco" data-fechar>Concluir</button>
+    </div>
+  </div>
+</div>
+
+<!-- Área usada só na impressão do cupom -->
+<div id="area-cupom" aria-hidden="true"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script src="assets/js/qr.js"></script>
+<script src="assets/js/store.js"></script>
+<script src="assets/js/db.js"></script>
+<script src="assets/js/app.js"></script>
+<script src="assets/js/admin.js"></script>
+<script src="assets/js/router.js"></script>
+</body>
+</html>
