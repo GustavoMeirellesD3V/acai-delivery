@@ -352,11 +352,11 @@ begin
   end if;
 
   insert into public.produtos (nome, descricao, tem_sabor, ordem)
-  values ('Açaí', 'Açaí cremoso batido na hora, com todos os complementos inclusos.', true, 1)
+  values ('Açaí', 'Açaí cremoso, com todos os complementos inclusos.', true, 1)
   returning id into id_acai;
 
   insert into public.produtos (nome, descricao, tem_sabor, ordem)
-  values ('Cupuaçu', 'Creme de cupuaçu batido na hora, com todos os complementos inclusos.', false, 2)
+  values ('Cupuaçu', 'Creme de cupuaçu, com todos os complementos inclusos.', false, 2)
   returning id into id_cupu;
 
   insert into public.tamanhos (produto_id, nome, preco, ordem) values
