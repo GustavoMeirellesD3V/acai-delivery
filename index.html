@@ -6,6 +6,9 @@
 <title>Açaí Mais Chantilly</title>
 <meta name="description" content="Delivery de açaí e cupuaçu em Cachoeira Paulista. Monte o seu, escolha os complementos e peça pelo WhatsApp.">
 <meta name="theme-color" content="#1d0629">
+<link rel="icon" href="assets/img/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" href="assets/img/icone.png">
+<link rel="apple-touch-icon" href="assets/img/icone.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap">
@@ -31,18 +34,11 @@
 
   <header class="topo">
     <div class="wrap topo__in">
-      <div class="marca">
-        <svg class="marca__copo" viewBox="0 0 48 48" aria-hidden="true">
-          <path d="M12 16h24l-3 24a4 4 0 0 1-4 3.5H19a4 4 0 0 1-4-3.5z" fill="#4b1a69" stroke="#ff5fd0" stroke-width="2"/>
-          <path d="M14 22h20l-2.4 18H16.4z" fill="#2b0c3d"/>
-          <path d="M11 16c1-5 6-8 13-8s12 3 13 8z" fill="#f7f1fb"/>
-          <circle cx="24" cy="6" r="3" fill="#8dc63f"/>
-        </svg>
-        <div class="marca__txt">
-          <div class="marca__nome" id="marca-nome">Açaí Mais Chantilly</div>
-          <div class="marca__sub">Delivery • Cachoeira Paulista</div>
-        </div>
-      </div>
+      <a class="marca" href="#" aria-label="Início">
+        <img class="marca__logo" id="marca-logo" src="assets/img/logo.png"
+             alt="Açaí Mais Chantilly" width="136" height="64">
+        <span class="marca__sub">Delivery • Cachoeira Paulista</span>
+      </a>
       <div class="topo__acoes">
         <span id="status-loja" class="pill pill--aberta"><span class="pill__dot"></span>Aberta</span>
       </div>
@@ -116,10 +112,7 @@
   <div id="admin-login" class="login-tela">
     <form class="login-card" id="form-login">
       <div class="login-card__topo">
-        <svg width="46" height="46" viewBox="0 0 48 48" aria-hidden="true">
-          <path d="M12 16h24l-3 24a4 4 0 0 1-4 3.5H19a4 4 0 0 1-4-3.5z" fill="#4b1a69" stroke="#ff5fd0" stroke-width="2"/>
-          <path d="M11 16c1-5 6-8 13-8s12 3 13 8z" fill="#f7f1fb"/>
-        </svg>
+        <img class="login-card__logo" src="assets/img/logo.png" alt="" width="136" height="64">
         <h1 class="login-card__titulo">Área do lojista</h1>
         <p class="login-card__sub">Gerencie pedidos, cardápio e preços</p>
       </div>

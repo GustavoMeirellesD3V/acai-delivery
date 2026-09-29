@@ -74,14 +74,24 @@ button, input, select, textarea { font: inherit; color: inherit; }
   border-bottom: 1px solid var(--borda);
 }
 .topo__in { display: flex; align-items: center; gap: 12px; padding-block: 11px; }
-.marca { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.marca__copo { width: 38px; height: 38px; flex: none; }
-.marca__txt { min-width: 0; }
-.marca__nome {
-  font-family: var(--display); font-weight: 800; font-size: 19px;
-  letter-spacing: .3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+.marca {
+  display: flex; flex-direction: column; gap: 2px;
+  min-width: 0; text-decoration: none; color: inherit;
 }
-.marca__sub { font-size: 11px; color: var(--creme-fraco); letter-spacing: .12em; text-transform: uppercase; }
+.marca__logo {
+  width: 118px; height: auto; display: block;
+  /* a arte já vem sem fundo; a sombra só descola do roxo do cabeçalho */
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .35));
+}
+.marca__sub {
+  font-size: 10px; color: var(--creme-fraco);
+  letter-spacing: .14em; text-transform: uppercase;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+@media (max-width: 380px) {
+  .marca__logo { width: 100px; }
+  .marca__sub { font-size: 9px; letter-spacing: .1em; }
+}
 .topo__acoes { margin-left: auto; display: flex; align-items: center; gap: 8px; }
 
 .pill {

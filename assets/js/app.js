@@ -48,7 +48,9 @@ function renderLoja() {
   const c = DB.config;
   if (!c) return;
 
-  $('#marca-nome').textContent = c.nomeLoja;
+  // A logo é imagem; o nome vindo do painel alimenta o texto alternativo,
+  // para leitor de tela e para quando a imagem não carregar.
+  $('#marca-logo').alt = c.nomeLoja;
   document.title = c.nomeLoja;
 
   atualizarStatusLoja();

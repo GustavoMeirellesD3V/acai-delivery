@@ -12,6 +12,7 @@
   box-shadow: var(--sombra);
 }
 .login-card__topo { text-align: center; margin-bottom: 22px; }
+.login-card__logo { width: 132px; height: auto; margin: 0 auto 4px; display: block; }
 .login-card__titulo { font-size: 25px; font-weight: 800; margin-top: 10px; }
 .login-card__sub { font-size: 13px; color: var(--creme-fraco); margin-top: 4px; }
 
@@ -22,6 +23,11 @@
   border-bottom: 1px solid var(--borda);
 }
 .admin-topo__in { display: flex; align-items: center; gap: 12px; padding-block: 11px; }
+.admin-topo .marca { flex-direction: row; align-items: center; gap: 10px; }
+.admin-topo .marca__nome {
+  font-family: var(--display); font-weight: 800; font-size: 18px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 
 .abas {
   display: flex; gap: 6px; overflow-x: auto; padding-block: 9px;
