@@ -40,6 +40,50 @@ function cliente() {
   return sb;
 }
 
+/* ---------------- repetição em falha passageira ----------------
+   O Supabase às vezes recusa uma requisição com PGRST303
+   ("JWT issued at future"): o gateway deles emite um token interno
+   e o PostgREST recusa porque os relógios dos dois nós estão
+   dessincronizados por alguns instantes. Não há correção do nosso
+   lado — o token é emitido e julgado dentro da infraestrutura deles.
+   Some sozinho em menos de um segundo, então tentamos de novo.
+
+   Sem isto, um piscar de olhos no servidor derruba a loja inteira
+   para quem estiver abrindo o site naquele instante.
+---------------------------------------------------------------- */
+const espera = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/* Erro que vale repetir: o servidor recusou ANTES de fazer qualquer
+   coisa, então repetir não duplica nada. */
+function ehRecusaPassageira(erro) {
+  const m = String((erro && erro.message) || erro || '');
+  return /PGRST303|issued at future|JWTIssuedAtFuture|jwt.*not.*yet.*valid/i.test(m);
+}
+
+/* Erro de rede: pode ter chegado ao servidor ou não. Repetir é seguro
+   para leitura, mas não para gravação. */
+function ehFalhaDeRede(erro) {
+  const m = String((erro && erro.message) || erro || '');
+  return /Failed to fetch|NetworkError|Load failed|ERR_NETWORK|timeout|AbortError/i.test(m);
+}
+
+async function comRetentativa(fn, { tentativas = 4, repetirRede = true } = {}) {
+  let ultimo;
+  for (let i = 0; i < tentativas; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      ultimo = e;
+      const vale = ehRecusaPassageira(e) || (repetirRede && ehFalhaDeRede(e));
+      if (!vale || i === tentativas - 1) throw e;
+      // 300ms, 600ms, 1200ms — com uma folga aleatória para não
+      // sincronizar todos os clientes na mesma retentativa
+      await espera(300 * Math.pow(2, i) + Math.random() * 200);
+    }
+  }
+  throw ultimo;
+}
+
 /* ---------------- normalização ----------------
    O banco usa snake_case; as telas usam camelCase.
    A conversão fica toda aqui.
@@ -93,6 +137,10 @@ function normPedido(row) {
 
 /* ---------------- carga do cardápio ---------------- */
 async function carregarCatalogo() {
+  return comRetentativa(() => buscarCatalogo());
+}
+
+async function buscarCatalogo() {
   const s = cliente();
   if (!s) throw new Error(erroConexao);
 
@@ -106,7 +154,11 @@ async function carregarCatalogo() {
   ]);
 
   const falhou = [cfg, prods, tams, sabs, comps, bairros].find((r) => r.error);
-  if (falhou) throw new Error(falhou.error.message);
+  if (falhou) {
+    const e = new Error(falhou.error.message);
+    e.code = falhou.error.code;          // PGRST303 chega por aqui
+    throw e;
+  }
 
   DB.config = normConfig(cfg.data, bairros.data);
 
@@ -137,9 +189,20 @@ async function criarPedido(payload) {
   const s = cliente();
   if (!s) throw new Error(erroConexao);
 
-  const { data, error } = await s.rpc('criar_pedido', { payload });
-  if (error) throw new Error(traduzErro(error.message));
-  return data;
+  // repetirRede: false é proposital. Numa falha de rede não dá para
+  // saber se o pedido foi gravado antes da conexão cair — repetir
+  // criaria um pedido duplicado. Já a recusa por relógio acontece
+  // antes de a função rodar, então repetir é seguro.
+  return comRetentativa(async () => {
+    const { data, error } = await s.rpc('criar_pedido', { payload });
+    if (error) {
+      const e = new Error(error.message);
+      e.code = error.code;
+      if (ehRecusaPassageira(e)) throw e;     // deixa a retentativa pegar
+      throw new Error(traduzErro(error.message));
+    }
+    return data;
+  }, { tentativas: 3, repetirRede: false });
 }
 
 /* Traduz o erro do banco para uma frase que o cliente entende.
@@ -173,7 +236,9 @@ function traduzErro(msg) {
 async function entrar(email, senha) {
   const s = cliente();
   if (!s) throw new Error(erroConexao);
-  const { data, error } = await s.auth.signInWithPassword({ email, password: senha });
+  const { data, error } = await comRetentativa(
+    () => s.auth.signInWithPassword({ email, password: senha }),
+    { tentativas: 3, repetirRede: false });
   if (error) {
     // Nunca dizemos se o erro foi no e-mail ou na senha: isso revelaria
     // quais contas existem (enumeração de usuários).
@@ -252,14 +317,20 @@ async function registrarEvento(acao) {
 
 /* ---------------- painel: pedidos ---------------- */
 async function carregarPedidos(limite) {
-  const s = cliente();
-  const { data, error } = await s
-    .from('pedidos').select('*')
-    .order('criado_em', { ascending: false })
-    .limit(limite || 200);
-  if (error) throw new Error(error.message);
-  DB.pedidos = data.map(normPedido);
-  return DB.pedidos;
+  return comRetentativa(async () => {
+    const s = cliente();
+    const { data, error } = await s
+      .from('pedidos').select('*')
+      .order('criado_em', { ascending: false })
+      .limit(limite || 200);
+    if (error) {
+      const e = new Error(error.message);
+      e.code = error.code;
+      throw e;
+    }
+    DB.pedidos = data.map(normPedido);
+    return DB.pedidos;
+  });
 }
 
 async function atualizarStatus(pedidoId, status) {

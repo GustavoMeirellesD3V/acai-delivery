@@ -1,0 +1,31 @@
+# =========================================================
+#  Cabeçalhos para Cloudflare Pages
+#  Equivalente ao vercel.json — a Cloudflare não lê aquele arquivo.
+#  Mantenha os dois se quiser poder voltar para a Vercel.
+# =========================================================
+
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co; frame-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests
+  Strict-Transport-Security: max-age=31536000
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: geolocation=(), microphone=(), camera=(), payment=(), usb=(), interest-cohort=()
+  Cross-Origin-Opener-Policy: same-origin
+  X-Permitted-Cross-Domain-Policies: none
+
+# Sem build, o nome do arquivo nunca muda — então o navegador precisa
+# perguntar se mudou a cada visita. Quando não mudou, vem um 304 curtinho.
+/assets/*
+  Cache-Control: public, max-age=0, must-revalidate
+
+/index.html
+  Cache-Control: public, max-age=0, must-revalidate
+
+# As chaves do Supabase: nunca guardar em cache.
+/config.js
+  Cache-Control: no-store
+
+# Os arquivos .sql não precisam aparecer em buscador.
+/supabase/*
+  X-Robots-Tag: noindex
