@@ -7,6 +7,33 @@ let abaAtual = 'pedidos';
 let filtroStatus = 'ativos';
 let pedidoAberto = null;
 let somLigado = true;
+let filtroMes = '';        // '' = recentes (ao vivo); 'AAAA-MM' = mês inteiro
+let mesCaixa = '';
+
+/* ---------------- meses (horário de Brasília) ---------------- */
+const diaEmBrasilia = (d) =>
+  new Date(d).toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }); // AAAA-MM-DD
+const mesDe = (d) => diaEmBrasilia(d).slice(0, 7);
+const mesAtual = () => mesDe(new Date());
+
+function ultimosMeses(n) {
+  let [ano, mes] = mesAtual().split('-').map(Number);
+  const lista = [];
+  for (let i = 0; i < n; i++) {
+    lista.push(`${ano}-${String(mes).padStart(2, '0')}`);
+    if (--mes === 0) { mes = 12; ano--; }
+  }
+  return lista;
+}
+
+function rotuloMes(chave) {
+  const [ano, mes] = chave.split('-').map(Number);
+  const nome = new Date(ano, mes - 1, 1).toLocaleDateString('pt-BR', { month: 'long' });
+  return nome.charAt(0).toUpperCase() + nome.slice(1) + '/' + ano;
+}
+
+const opcoesMes = (selecionado) => ultimosMeses(12)
+  .map((m) => `<option value="${m}" ${m === selecionado ? 'selected' : ''}>${rotuloMes(m)}</option>`).join('');
 
 /* ---------------- login ---------------- */
 async function tentarLogin(ev) {
@@ -53,6 +80,7 @@ async function mostrarPainel() {
   });
 
   $('#painel-conteudo').innerHTML = '<div class="vazio"><p>Carregando pedidos…</p></div>';
+  filtroMes = '';
   try {
     await carregarPedidos();
   } catch (e) {
@@ -136,8 +164,8 @@ function tocarAlerta() {
 
 /* ---------------- papéis ---------------- */
 const ABAS_POR_PAPEL = {
-  admin:     ['pedidos', 'cardapio', 'complementos', 'sabores', 'config', 'equipe', 'registro'],
-  gerente:   ['pedidos', 'cardapio', 'complementos', 'sabores', 'config', 'registro'],
+  admin:     ['pedidos', 'cardapio', 'complementos', 'sabores', 'config', 'equipe', 'registro', 'caixa'],
+  gerente:   ['pedidos', 'cardapio', 'complementos', 'sabores', 'config', 'registro', 'caixa'],
   atendente: ['pedidos']
 };
 
@@ -168,19 +196,25 @@ function renderAba() {
   else if (abaAtual === 'sabores') alvo.innerHTML = htmlSabores();
   else if (abaAtual === 'equipe') { alvo.innerHTML = '<div class="vazio"><p>Carregando equipe…</p></div>'; mostrarEquipe(); }
   else if (abaAtual === 'registro') { alvo.innerHTML = '<div class="vazio"><p>Carregando registro…</p></div>'; mostrarRegistro(); }
+  else if (abaAtual === 'caixa') { alvo.innerHTML = '<div class="vazio"><p>Carregando caixa…</p></div>'; mostrarCaixa(); }
   else alvo.innerHTML = htmlConfig();
 }
 
 /* ---------------- aba: pedidos ---------------- */
 function htmlPedidos() {
+  // Com mês escolhido, DB.pedidos é o mês inteiro; o filtro extra descarta
+  // pedido novo que chega ao vivo enquanto se olha um mês passado.
+  const base = filtroMes ? DB.pedidos.filter((p) => mesDe(p.criadoEm) === filtroMes) : DB.pedidos;
   const hoje = new Date().toDateString();
-  const doDia = DB.pedidos.filter((p) => new Date(p.criadoEm).toDateString() === hoje && p.status !== 'cancelado');
-  const faturamento = doDia.reduce((s, p) => s + p.total, 0);
-  const abertos = DB.pedidos.filter((p) => ['novo', 'preparo', 'saiu', 'pronto'].includes(p.status));
+  const periodo = base.filter((p) => p.status !== 'cancelado'
+    && (filtroMes || new Date(p.criadoEm).toDateString() === hoje));
+  const faturamento = periodo.reduce((s, p) => s + p.total, 0);
+  const abertos = base.filter((p) => ['novo', 'preparo', 'saiu', 'pronto'].includes(p.status));
+  const sufixo = filtroMes ? 'no mês' : 'hoje';
 
-  let lista = DB.pedidos;
+  let lista = base;
   if (filtroStatus === 'ativos') lista = abertos;
-  else if (filtroStatus !== 'todos') lista = DB.pedidos.filter((p) => p.status === filtroStatus);
+  else if (filtroStatus !== 'todos') lista = base.filter((p) => p.status === filtroStatus);
 
   const filtros = [['ativos', 'Em aberto'], ['todos', 'Todos'], ...STATUS.map((s) => [s.id, s.label])];
 
@@ -190,12 +224,16 @@ function htmlPedidos() {
 
     <div class="metricas">
       <div class="metrica"><div class="metrica__rotulo">Em aberto</div><div class="metrica__valor">${abertos.length}</div></div>
-      <div class="metrica"><div class="metrica__rotulo">Pedidos hoje</div><div class="metrica__valor">${doDia.length}</div></div>
-      <div class="metrica metrica--destaque"><div class="metrica__rotulo">Faturamento hoje</div><div class="metrica__valor">${brl(faturamento)}</div></div>
-      <div class="metrica"><div class="metrica__rotulo">Ticket médio</div><div class="metrica__valor">${brl(doDia.length ? faturamento / doDia.length : 0)}</div></div>
+      <div class="metrica"><div class="metrica__rotulo">Pedidos ${sufixo}</div><div class="metrica__valor">${periodo.length}</div></div>
+      <div class="metrica metrica--destaque"><div class="metrica__rotulo">Faturamento ${sufixo}</div><div class="metrica__valor">${brl(faturamento)}</div></div>
+      <div class="metrica"><div class="metrica__rotulo">Ticket médio</div><div class="metrica__valor">${brl(periodo.length ? faturamento / periodo.length : 0)}</div></div>
     </div>
 
-    <div class="filtros" style="margin-bottom:10px">
+    <div class="filtros filtros--centro" style="margin-bottom:10px">
+      <select class="entrada entrada--mes" id="sel-mes-pedidos" aria-label="Filtrar pedidos por mês">
+        <option value="" ${filtroMes ? '' : 'selected'}>Recentes (ao vivo)</option>
+        ${opcoesMes(filtroMes)}
+      </select>
       <label class="interruptor">
         <input type="checkbox" id="chk-som" ${somLigado ? 'checked' : ''}> Alerta sonoro em pedido novo
       </label>
@@ -399,8 +437,8 @@ function htmlSabores() {
 
 /* ---------------- aba: equipe ---------------- */
 const DESCRICAO_PAPEL = {
-  admin:     'Acesso total, incluindo equipe e registro.',
-  gerente:   'Cardápio, preços, horários, pedidos e registro. Não mexe na equipe.',
+  admin:     'Acesso total, incluindo equipe, registro e caixa.',
+  gerente:   'Cardápio, preços, horários, pedidos, registro e caixa. Não mexe na equipe.',
   atendente: 'Só a aba Pedidos: ver e atualizar status.'
 };
 
@@ -493,7 +531,7 @@ const ROTULO_ACAO = {
 const ROTULO_TABELA = {
   produtos: 'produto', tamanhos: 'tamanho/preço', complementos: 'complemento',
   sabores: 'sabor', bairros: 'bairro', config: 'configurações',
-  pedidos: 'pedido', sessao: 'conta'
+  pedidos: 'pedido', gastos: 'gasto', sessao: 'conta'
 };
 
 async function mostrarRegistro() {
@@ -523,6 +561,7 @@ function resumoMudanca(l) {
     }).join(' · ');
   }
   const alvo = l.depois || l.antes || {};
+  if (alvo.descricao && alvo.valor != null) return `${alvo.descricao} · ${brl(Number(alvo.valor))}`;
   return alvo.nome ? String(alvo.nome) : (alvo.cliente_nome ? String(alvo.cliente_nome) : '');
 }
 
@@ -550,6 +589,83 @@ function htmlRegistro(linhas) {
         </tbody>
       </table>
     </div>` : '<div class="vazio"><div class="vazio__icone">📋</div><p>Nenhum evento registrado ainda.</p></div>'}`;
+}
+
+/* ---------------- aba: caixa ----------------
+   Faturamento vem dos pedidos do mês; gastos são lançados à mão.
+   Lucro = faturamento − gastos.
+------------------------------------------- */
+const CATEGORIAS_GASTO = ['Insumos', 'Embalagens', 'Aluguel e contas', 'Funcionários e motoboy', 'Outros'];
+
+async function mostrarCaixa() {
+  mesCaixa = mesCaixa || mesAtual();
+  const mes = mesCaixa;
+  let pedidos, gastos;
+  try {
+    [pedidos, gastos] = await Promise.all([carregarPedidosDoMes(mes), carregarGastosDoMes(mes)]);
+  } catch (e) {
+    if (abaAtual !== 'caixa') return;
+    $('#painel-conteudo').innerHTML =
+      `<div class="aviso aviso--erro">Não foi possível abrir o caixa: ${esc(e.message)}</div>`;
+    return;
+  }
+  // a pessoa pode ter trocado de aba ou de mês enquanto carregava
+  if (abaAtual !== 'caixa' || mes !== mesCaixa) return;
+  $('#painel-conteudo').innerHTML = htmlCaixa(pedidos, gastos);
+}
+
+function htmlCaixa(pedidos, gastos) {
+  const validos = pedidos.filter((p) => p.status !== 'cancelado');
+  const faturamento = validos.reduce((s, p) => s + p.total, 0);
+  const totalGastos = gastos.reduce((s, g) => s + g.valor, 0);
+  const lucro = faturamento - totalGastos;
+  const diaPadrao = mesCaixa === mesAtual() ? diaEmBrasilia(new Date()) : `${mesCaixa}-01`;
+  const diaMes = (d) => d.split('-').reverse().slice(0, 2).join('/');
+
+  return `
+    <h1 class="painel__titulo">Caixa</h1>
+    <p class="painel__sub">Faturamento dos pedidos do mês menos os gastos lançados aqui. Pedidos cancelados não entram.</p>
+
+    <div class="filtros filtros--centro">
+      <select class="entrada entrada--mes" id="sel-mes-caixa" aria-label="Mês do caixa">${opcoesMes(mesCaixa)}</select>
+    </div>
+
+    <div class="metricas">
+      <div class="metrica"><div class="metrica__rotulo">Faturamento</div><div class="metrica__valor">${brl(faturamento)}</div></div>
+      <div class="metrica"><div class="metrica__rotulo">Gastos</div><div class="metrica__valor">${brl(totalGastos)}</div></div>
+      <div class="metrica ${lucro < 0 ? 'metrica--negativa' : 'metrica--destaque'}"><div class="metrica__rotulo">Lucro</div><div class="metrica__valor">${brl(lucro)}</div></div>
+      <div class="metrica"><div class="metrica__rotulo">Pedidos</div><div class="metrica__valor">${validos.length}</div></div>
+    </div>
+
+    <div class="caixa">
+      <h2 class="caixa__titulo">Adicionar gasto</h2>
+      <p class="caixa__sub">Insumos, embalagens, aluguel, motoboy… tudo que saiu do caixa. Fica no registro de atividade.</p>
+      <div class="add-linha" style="margin-top:0">
+        <input class="entrada entrada--data" type="date" id="novo-gasto-data" value="${diaPadrao}" aria-label="Data">
+        <input class="entrada entrada--nome" id="novo-gasto-desc" maxlength="120" placeholder="Descrição (ex.: polpa 10 kg)">
+        <select class="entrada entrada--categoria" id="novo-gasto-cat" aria-label="Categoria">
+          ${CATEGORIAS_GASTO.map((c) => `<option>${c}</option>`).join('')}
+        </select>
+        <input class="entrada entrada--preco" type="number" min="0.01" step="0.01" inputmode="decimal" id="novo-gasto-valor" placeholder="Valor">
+        <button class="btn btn--folha" id="btn-add-gasto">Adicionar</button>
+      </div>
+    </div>
+
+    ${gastos.length ? `<div class="caixa" style="padding:0;overflow-x:auto">
+      <table class="tabela-log tabela-gastos">
+        <thead><tr><th>Dia</th><th>Descrição</th><th>Categoria</th><th class="num">Valor</th><th></th></tr></thead>
+        <tbody>
+          ${gastos.map((g) => `
+            <tr>
+              <td class="log-hora">${diaMes(g.data)}</td>
+              <td>${esc(g.descricao)}</td>
+              <td><span class="log-papel" style="margin-left:0">${esc(g.categoria)}</span></td>
+              <td class="num">${brl(g.valor)}</td>
+              <td class="num"><button class="btn btn--sm btn--perigo" data-gasto-remover="${g.id}">Excluir</button></td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>` : '<div class="vazio"><div class="vazio__icone">🧾</div><p>Nenhum gasto lançado neste mês.</p></div>'}`;
 }
 
 /* ---------------- aba: configurações ---------------- */
@@ -868,6 +984,31 @@ document.addEventListener('click', async (ev) => {
     return;
   }
 
+  /* caixa */
+  if (t.id === 'btn-add-gasto') {
+    const data = $('#novo-gasto-data').value;
+    const descricao = $('#novo-gasto-desc').value.trim();
+    const valor = Math.round(Number($('#novo-gasto-valor').value) * 100) / 100;
+    if (!data || !descricao || !(valor > 0)) { toast('Preencha data, descrição e valor'); return; }
+    t.disabled = true;
+    try {
+      await inserirLinha('gastos', { data, descricao, categoria: $('#novo-gasto-cat').value, valor });
+      toast(mesDe(data + 'T12:00:00-03:00') === mesCaixa
+        ? 'Gasto adicionado' : `Gasto adicionado em ${rotuloMes(data.slice(0, 7))}`);
+      mostrarCaixa();
+    } catch (e) {
+      t.disabled = false;
+      toast(/policy|permission/i.test(e.message) ? 'Seu perfil não pode lançar gastos.' : 'Erro: ' + e.message);
+    }
+    return;
+  }
+  if (d.gastoRemover) {
+    if (!await confirmar('Excluir este gasto?', 'A exclusão fica registrada no log.')) return;
+    try { await removerLinha('gastos', d.gastoRemover); toast('Gasto excluído'); mostrarCaixa(); }
+    catch (e) { toast('Erro: ' + e.message); }
+    return;
+  }
+
   if (t.id === 'btn-salvar-config') { guardarConfig(); return; }
 });
 
@@ -878,6 +1019,29 @@ document.addEventListener('change', async (ev) => {
 
   try {
     if (t.id === 'chk-som') { somLigado = t.checked; if (somLigado) tocarAlerta(); return; }
+
+    if (t.id === 'sel-mes-pedidos') {
+      const mes = t.value;
+      const anterior = filtroMes;
+      t.disabled = true;
+      try {
+        if (mes) DB.pedidos = await carregarPedidosDoMes(mes);
+        else await carregarPedidos();
+        filtroMes = mes;
+        pedidoAberto = null;
+      } catch (e) {
+        toast('Não foi possível carregar os pedidos: ' + e.message);
+        filtroMes = anterior;
+      }
+      if (abaAtual === 'pedidos') renderAba();
+      return;
+    }
+    if (t.id === 'sel-mes-caixa') {
+      mesCaixa = t.value;
+      $('#painel-conteudo').innerHTML = '<div class="vazio"><p>Carregando caixa…</p></div>';
+      mostrarCaixa();
+      return;
+    }
 
     if (d.diaAberto) {
       const dia = d.diaAberto;

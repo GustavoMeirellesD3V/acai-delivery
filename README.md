@@ -122,6 +122,7 @@ supabase/
   migration-horarios.sql    horário de funcionamento automático
   migration-seguranca.sql   perfis, auditoria, rate limiting
   migration-equipe.sql      gestão de equipe pelo painel
+  migration-caixa.sql       gastos da loja (aba Caixa)
 assets/js/
   qr.js                 gerador de QR Code
   store.js              formatação, PIX, textos do WhatsApp, horários

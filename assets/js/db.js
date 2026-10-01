@@ -333,6 +333,59 @@ async function carregarPedidos(limite) {
   });
 }
 
+/* Mês sempre no horário de Brasília (UTC−3, sem horário de verão desde 2019):
+   um pedido às 23h do dia 31 pertence ao dia 31, não ao mês seguinte. */
+function intervaloDoMes(chave) {
+  const [ano, mes] = chave.split('-').map(Number);
+  const seguinte = mes === 12 ? `${ano + 1}-01` : `${ano}-${String(mes + 1).padStart(2, '0')}`;
+  return {
+    inicio: `${chave}-01T00:00:00-03:00`, fim: `${seguinte}-01T00:00:00-03:00`,
+    diaInicio: `${chave}-01`, diaFim: `${seguinte}-01`
+  };
+}
+
+/* Sem o limite de 200 da lista ao vivo: o mês inteiro, em páginas de 1000
+   (o teto por requisição do Supabase). */
+async function carregarPedidosDoMes(chave) {
+  const { inicio, fim } = intervaloDoMes(chave);
+  return comRetentativa(async () => {
+    const s = cliente();
+    const linhas = [];
+    for (let de = 0; ; de += 1000) {
+      const { data, error } = await s
+        .from('pedidos').select('*')
+        .gte('criado_em', inicio).lt('criado_em', fim)
+        .order('criado_em', { ascending: false })
+        .range(de, de + 999);
+      if (error) throw new Error(error.message);
+      linhas.push(...data);
+      if (data.length < 1000) break;
+    }
+    return linhas.map(normPedido);
+  });
+}
+
+/* ---------------- painel: caixa ---------------- */
+async function carregarGastosDoMes(chave) {
+  const { diaInicio, diaFim } = intervaloDoMes(chave);
+  return comRetentativa(async () => {
+    const s = cliente();
+    const { data, error } = await s
+      .from('gastos').select('id,data,descricao,categoria,valor')
+      .gte('data', diaInicio).lt('data', diaFim)
+      .order('data', { ascending: false })
+      .order('criado_em', { ascending: false });
+    if (error) {
+      throw new Error(/permission|policy/i.test(error.message)
+        ? 'Seu perfil não tem acesso ao caixa.'
+        : /gastos/.test(error.message) && /exist|schema cache/i.test(error.message)
+          ? 'A tabela de gastos ainda não existe. Rode supabase/migration-caixa.sql no Supabase.'
+          : error.message);
+    }
+    return data.map((g) => ({ ...g, valor: Number(g.valor) }));
+  });
+}
+
 async function atualizarStatus(pedidoId, status) {
   const s = cliente();
   const p = DB.pedidos.find((x) => x.id === pedidoId);
